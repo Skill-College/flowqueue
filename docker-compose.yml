@@ -1,0 +1,64 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: flow
+      POSTGRES_PASSWORD: flow
+      POSTGRES_DB: flowqueue
+    volumes:
+      # PostgreSQL 18+ images store data in a version subdir; mount the parent.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U flow -d flowqueue']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - '5432:5432'
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://flow:flow@db:5432/flowqueue
+      SECRET_KEY: change-me-in-prod
+      API_KEY_HEADER: Authorization
+      LOG_LEVEL: INFO
+      WORKER_CONCURRENCY: '4'
+      RUN_WORKERS: '0'
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4"
+    expose:
+      - '8000'
+    ports:
+      - '8000:8000'
+
+  worker:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://flow:flow@db:5432/flowqueue
+      SECRET_KEY: change-me-in-prod
+      LOG_LEVEL: INFO
+      RUN_WORKERS: '1'
+    command: ['python', '-m', 'app.workers.runner']
+
+  nginx:
+    image: nginx:1.25
+    depends_on:
+      - app
+    volumes:
+      - ./nginx/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      APP_UPSTREAM: app:8000
+    ports:
+      - '8090:80'
+      - '443:443'
+
+volumes:
+  pgdata:
