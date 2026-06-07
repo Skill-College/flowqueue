@@ -1,5 +1,5 @@
-import { Link } from "react-router-dom";
-import { motion } from "framer-motion";
+import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import {
   ArrowRight,
   Database,
@@ -10,67 +10,67 @@ import {
   Webhook,
   Terminal,
   Sparkles,
-} from "lucide-react";
-import { LogoMark } from "@/components/Logo";
-import { Button } from "@/components/ui/button";
-import { Section, SectionHeading } from "@/components/marketing/Section";
-import { Reveal } from "@/components/marketing/Reveal";
-import { FeatureCard } from "@/components/marketing/FeatureCard";
-import { FanOutDiagram } from "@/components/marketing/FanOutDiagram";
-import { ParticleField } from "@/components/marketing/ParticleField";
-import { CodeBlock } from "@/components/marketing/CodeBlock";
+} from 'lucide-react';
+import { LogoMark } from '@/components/Logo';
+import { Button } from '@/components/ui/button';
+import { Section, SectionHeading } from '@/components/marketing/Section';
+import { Reveal } from '@/components/marketing/Reveal';
+import { FeatureCard } from '@/components/marketing/FeatureCard';
+import { FanOutDiagram } from '@/components/marketing/FanOutDiagram';
+import { ParticleField } from '@/components/marketing/ParticleField';
+import { CodeBlock } from '@/components/marketing/CodeBlock';
 
 const features = [
   {
     icon: Database,
-    title: "Durable by default",
+    title: 'Durable by default',
     description:
-      "Every message and delivery is persisted in PostgreSQL — no Redis, no data loss on restart. Your queue is as durable as your database.",
+      'Every message and delivery is persisted in PostgreSQL — no Redis, no data loss on restart. Your queue is as durable as your database.',
   },
   {
     icon: GitFork,
-    title: "Fan-out to many consumers",
+    title: 'Fan-out to many consumers',
     description:
-      "One message, many independent consumers. Each gets its own delivery with separate retries, status and audit trail.",
+      'One message, many independent consumers. Each gets its own delivery with separate retries, status and audit trail.',
   },
   {
     icon: ListChecks,
-    title: "Per-consumer lifecycle",
+    title: 'Per-consumer lifecycle',
     description:
-      "pending → processing → completed / failed / dead. Visibility timeouts reclaim stuck work; a DLQ catches what never succeeds.",
+      'pending → processing → completed / failed / dead. Visibility timeouts reclaim stuck work; a DLQ catches what never succeeds.',
   },
   {
     icon: Webhook,
-    title: "Webhooks with routing",
+    title: 'Webhooks with routing',
     description:
-      "Push to HTTPS endpoints with HMAC signing and conditional routing rules — deliver only the messages each endpoint cares about.",
+      'Push to HTTPS endpoints with HMAC signing and conditional routing rules — deliver only the messages each endpoint cares about.',
   },
   {
     icon: History,
-    title: "Replay & backfill",
+    title: 'Replay & backfill',
     description:
-      "Re-deliver failed messages, a date range, or specific IDs — rate-limited and safe. Recover from a bad deploy in one click.",
+      'Re-deliver failed messages, a date range, or specific IDs — rate-limited and safe. Recover from a bad deploy in one click.',
   },
   {
     icon: ShieldCheck,
-    title: "Tamper-evident audit log",
+    title: 'Tamper-evident audit log',
     description:
-      "Every state transition is appended to an HMAC-chained log. Know exactly what happened to every message, when, and why.",
+      'Every state transition is appended to an HMAC-chained log. Know exactly what happened to every message, when, and why.',
   },
 ];
 
 const stats = [
-  { value: "100%", label: "Postgres-backed durability" },
-  { value: "3", label: "Consumer types — pull, SDK, webhook" },
-  { value: "0", label: "Extra infra to run" },
-  { value: "Free", label: "During public beta" },
+  { value: '100%', label: 'Postgres-backed durability' },
+  { value: '3', label: 'Consumer types — pull, SDK, webhook' },
+  { value: '0', label: 'Extra infra to run' },
+  { value: 'Free', label: 'During public beta' },
 ];
 
 const quickstart = `pip install flowqueue`;
 
 const codeSample = `from flowqueue import FlowQueueClient, FlowQueueConsumer
 
-client = FlowQueueClient("https://your-host", "fq_your_api_key")
+client = FlowQueueClient("https://api-flowqueue.skill.college/", "fq_your_api_key")
 
 # 1. create a durable queue + a pull consumer
 queue = client.create_queue("orders", max_retries=5, dlq_enabled=True)
@@ -126,8 +126,8 @@ export function Home() {
             transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
             className="mx-auto max-w-4xl text-center font-display text-4xl font-bold leading-[1.1] tracking-tight sm:text-6xl"
           >
-            Durable message queues with{" "}
-            <span className="text-gradient">fan-out, replay</span> &amp; webhooks
+            Durable message queues with <span className="text-gradient">fan-out, replay</span> &amp;
+            webhooks
           </motion.h1>
 
           <motion.p
@@ -136,9 +136,9 @@ export function Home() {
             transition={{ duration: 0.7, delay: 0.25, ease: [0.16, 1, 0.3, 1] }}
             className="mx-auto mt-6 max-w-2xl text-center text-lg text-muted-foreground"
           >
-            FlowQueue is a Postgres-backed message processing platform. Publish once,
-            deliver to many consumers — pull over HTTP, run an SDK worker, or push to a
-            webhook. Every delivery is tracked, retried and replayable.
+            FlowQueue is a Postgres-backed message processing platform. Publish once, deliver to
+            many consumers — pull over HTTP, run an SDK worker, or push to a webhook. Every delivery
+            is tracked, retried and replayable.
           </motion.p>
 
           <motion.div
@@ -199,9 +199,8 @@ export function Home() {
               From zero to consuming in <span className="text-gradient">5 lines</span>
             </h2>
             <p className="mt-4 text-muted-foreground">
-              Use the official Python SDK, or talk to the plain HTTP API from any language.
-              Scoped API keys, idempotent publishes, and a worker loop that handles retries
-              for you.
+              Use the official Python SDK, or talk to the plain HTTP API from any language. Scoped
+              API keys, idempotent publishes, and a worker loop that handles retries for you.
             </p>
             <div className="mt-6 max-w-xs">
               <CodeBlock code={quickstart} lang="bash" />
@@ -251,8 +250,8 @@ export function Home() {
               Ship reliable messaging today
             </h2>
             <p className="relative mx-auto mt-4 max-w-xl text-white/90">
-              Free during beta. No credit card. Create a queue and publish your first
-              message in minutes.
+              Free during beta. No credit card. Create a queue and publish your first message in
+              minutes.
             </p>
             <div className="relative mt-8 flex flex-wrap justify-center gap-3">
               <Link to="/register">

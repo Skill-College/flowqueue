@@ -51,6 +51,8 @@ services:
   # Web UI: serves the React SPA and proxies /api -> app (single origin).
   web:
     build: ./web
+    environment:
+      VITE_API_TARGET: https://api-flowqueue.skill.college
     depends_on:
       - app
     ports:

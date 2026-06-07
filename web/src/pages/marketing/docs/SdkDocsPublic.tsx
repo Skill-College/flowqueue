@@ -1,16 +1,16 @@
-import { ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Reveal } from "@/components/marketing/Reveal";
-import { CodeBlock } from "@/components/marketing/CodeBlock";
-import { DocsShell, DocSection } from "./DocsShell";
+import { ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Reveal } from '@/components/marketing/Reveal';
+import { CodeBlock } from '@/components/marketing/CodeBlock';
+import { DocsShell, DocSection } from './DocsShell';
 
 const sections = [
-  { id: "install", label: "Install" },
-  { id: "quickstart", label: "Quickstart" },
-  { id: "producer", label: "Producer" },
-  { id: "consumer", label: "Consumer loop" },
-  { id: "manage", label: "Manage, replay & DLQ" },
-  { id: "keys", label: "API keys & errors" },
+  { id: 'install', label: 'Install' },
+  { id: 'quickstart', label: 'Quickstart' },
+  { id: 'producer', label: 'Producer' },
+  { id: 'consumer', label: 'Consumer loop' },
+  { id: 'manage', label: 'Manage, replay & DLQ' },
+  { id: 'keys', label: 'API keys & errors' },
 ];
 
 export function SdkDocsPublic() {
@@ -40,7 +40,7 @@ export function SdkDocsPublic() {
           lang="python"
           code={`from flowqueue import FlowQueueClient, FlowQueueConsumer
 
-client = FlowQueueClient("https://your-host", "fq_your_api_key")
+client = FlowQueueClient("https://api-flowqueue.skill.college", "fq_your_api_key")
 
 # Create a queue + pull consumer
 queue = client.create_queue("orders", max_retries=5, dlq_enabled=True)
@@ -79,14 +79,14 @@ client.publish(qid, {"ping": 1},
 
       <DocSection id="consumer" title="Consumer — worker loop">
         <p className="text-muted-foreground">
-          Return normally to complete a delivery; raise to fail it (it retries, then
-          dead-letters per the queue config).
+          Return normally to complete a delivery; raise to fail it (it retries, then dead-letters
+          per the queue config).
         </p>
         <CodeBlock
           lang="python"
           code={`from flowqueue import FlowQueueClient, FlowQueueConsumer
 
-client = FlowQueueClient("https://your-host", "fq_your_api_key")
+client = FlowQueueClient("https://api-flowqueue.skill.college", "fq_your_api_key")
 consumer = FlowQueueConsumer(client, "<consumer_id>")
 
 def handle(delivery):
@@ -139,9 +139,15 @@ except ApiError as e:
     print(e.status, e.code, e.message)`}
         />
         <Reveal className="mt-4 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground">
-          Prefer raw HTTP? See the{" "}
-          <a href="/docs/api" className="text-primary hover:underline">HTTP pull API docs</a> or
-          the full <a href="/docs" className="text-primary hover:underline">OpenAPI reference</a>.
+          Prefer raw HTTP? See the{' '}
+          <a href="/docs/api" className="text-primary hover:underline">
+            HTTP pull API docs
+          </a>{' '}
+          or the full{' '}
+          <a href="/docs" className="text-primary hover:underline">
+            OpenAPI reference
+          </a>
+          .
         </Reveal>
       </DocSection>
     </DocsShell>
