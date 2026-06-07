@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Activity } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { apiErrorMessage } from "@/lib/api";
@@ -9,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Logo } from "@/components/Logo";
 
 export function Register() {
   const { register } = useAuth();
@@ -26,7 +26,7 @@ export function Register() {
     setBusy(true);
     try {
       await register(email, password);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err) {
       toast.error(apiErrorMessage(err));
     } finally {
@@ -38,12 +38,9 @@ export function Register() {
     <div className="flex h-full items-center justify-center p-4">
       <ThemeToggle className="absolute right-4 top-4" />
       <div className="w-full max-w-sm">
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Activity size={20} />
-          </div>
-          <span className="text-2xl font-semibold tracking-tight">FlowQueue</span>
-        </div>
+        <Link to="/" className="mb-6 flex items-center justify-center">
+          <Logo size={36} animated={false} textClassName="text-2xl" />
+        </Link>
         <Card>
           <CardContent className="pt-6">
             <h1 className="text-lg font-semibold">Create your account</h1>

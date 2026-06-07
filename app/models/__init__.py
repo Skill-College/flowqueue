@@ -4,6 +4,7 @@ from app.models.api_key import ApiKey
 from app.models.consumer import Consumer, ConsumerType
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.delivery_log import DeliveryLog
+from app.models.feedback import Feedback, FeedbackCategory
 from app.models.message import Message
 from app.models.queue import Queue
 from app.models.queue_sequence import QueueSequence
@@ -19,6 +20,8 @@ __all__ = [
     "Delivery",
     "DeliveryStatus",
     "DeliveryLog",
+    "Feedback",
+    "FeedbackCategory",
     "Message",
     "Queue",
     "QueueSequence",

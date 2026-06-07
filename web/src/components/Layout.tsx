@@ -6,20 +6,21 @@ import {
   KeyRound,
   Users,
   LogOut,
-  Activity,
   Sun,
   Moon,
   Search as SearchIcon,
   BookOpen,
+  MessageSquare,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useRealtime } from "@/lib/useRealtime";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Logo } from "@/components/Logo";
 
 const nav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/queues", label: "Queues", icon: ListChecks, end: false },
   { to: "/search", label: "Search", icon: SearchIcon, end: false },
   { to: "/api-keys", label: "API Keys", icon: KeyRound, end: false },
@@ -36,11 +37,8 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="flex h-full">
       {/* Sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card/50 md:flex">
-        <Link to="/" className="flex items-center gap-2 px-5 py-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Activity size={18} />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">FlowQueue</span>
+        <Link to="/dashboard" className="flex items-center px-5 py-5">
+          <Logo size={30} animated={false} textClassName="text-lg" />
         </Link>
         <nav className="flex-1 space-y-1 px-3 py-2">
           {nav.map((n) => (
@@ -75,6 +73,22 @@ export function Layout({ children }: { children: ReactNode }) {
             >
               <Users size={18} />
               Users
+            </NavLink>
+          )}
+          {user?.role === "admin" && (
+            <NavLink
+              to="/admin/feedback"
+              className={({ isActive }) =>
+                cn(
+                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )
+              }
+            >
+              <MessageSquare size={18} />
+              Feedback
             </NavLink>
           )}
         </nav>

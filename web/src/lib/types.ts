@@ -126,6 +126,18 @@ export interface ReplayRequest {
   completed_at: string | null;
 }
 
+export type FeedbackCategory = "bug" | "feature" | "general";
+
+export interface Feedback {
+  id: string;
+  name: string | null;
+  email: string;
+  category: FeedbackCategory;
+  message: string;
+  user_id: string | null;
+  created_at: string;
+}
+
 export interface Page<T> {
   items: T[];
   total: number;

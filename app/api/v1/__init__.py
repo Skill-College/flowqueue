@@ -9,6 +9,7 @@ from app.api.v1 import (
     consumers,
     deliveries,
     events,
+    feedback,
     messages,
     queues,
     replay,
@@ -26,3 +27,4 @@ api_router.include_router(deliveries.router)
 api_router.include_router(replay.router)
 api_router.include_router(stats.router)
 api_router.include_router(api_keys.router)
+api_router.include_router(feedback.router)
