@@ -22,6 +22,9 @@ EVENT_REPLAYED = "replayed"
 EVENT_REMARK_ADDED = "remark_added"
 EVENT_METADATA_UPDATED = "metadata_updated"
 EVENT_EXPIRED = "expired"
+EVENT_DEAD_LETTERED = "dead_lettered"
+EVENT_REQUEUED = "requeued"
+EVENT_DISCARDED = "discarded"
 
 
 def write_log(

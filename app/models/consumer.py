@@ -1,4 +1,4 @@
-"""Consumer model — a subscriber on a queue (http poller, webhook, workflow, sdk)."""
+"""Consumer model — a subscriber on a queue (http poller, webhook push, sdk)."""
 
 import enum
 import uuid
@@ -22,7 +22,6 @@ from app.database import Base
 class ConsumerType(str, enum.Enum):
     http = "http"
     webhook = "webhook"
-    workflow = "workflow"
     sdk = "sdk"
 
 
@@ -41,7 +40,16 @@ class Consumer(Base):
         Enum(ConsumerType, name="consumer_type"), nullable=False
     )
     endpoint_url: Mapped[str | None] = mapped_column(String(2048))
+    # Filter conditions for this webhook (field/operator/value). Not multi-URL routing.
     routing_rules: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    # How to combine rules: 'any' (deliver if any matches) or 'all' (deliver if all).
+    match_mode: Mapped[str] = mapped_column(String(8), default="any", nullable=False)
+    # Optional HMAC secret; if set, outbound webhooks include X-FlowQueue-Signature.
+    signing_secret: Mapped[str | None] = mapped_column(String(128))
+    # Push (webhook) only: True => mark delivery completed on HTTP 2xx (default).
+    # False => 2xx leaves it 'processing'; receiver must call complete/fail back,
+    # else the visibility timeout reclaims and redelivers it.
+    auto_complete: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     meta: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

@@ -1,11 +1,11 @@
-"""Deterministic conditional routing engine for webhook/workflow consumers.
+"""Deterministic rule engine — webhook delivery FILTER (not multi-URL routing).
 
-routing_rules is a JSONB array on the consumer, e.g.:
-    [{"field": "payload.country", "operator": "equals", "value": "IN",
-      "action_url": "https://api-india.example.com"}]
+routing_rules is a JSONB array of filter conditions on the consumer, e.g.:
+    [{"field": "payload.country", "operator": "equals", "value": "IN"}]
 
-Field paths use simple dot-notation traversal. NO eval / dynamic code execution.
-First matching rule wins; if none match, callers fall back to consumer.endpoint_url.
+`matches()` decides whether a payload should be delivered to the consumer's single
+endpoint_url. match_mode 'any' => deliver if any rule matches; 'all' => deliver only
+if every rule matches. No rules => always deliver. Dot-notation traversal, no eval.
 """
 
 from typing import Any
@@ -46,20 +46,22 @@ def _compare(actual: Any, operator: str, expected: Any) -> bool:
     return False
 
 
-def evaluate(rules: list[dict], payload: dict) -> str | None:
-    """Return the action_url of the first matching rule, or None.
+def matches(rules: list[dict], payload: dict, mode: str = "any") -> bool:
+    """Return True if `payload` passes the filter rules under `mode` ('any'|'all').
 
-    `payload` is the raw message payload; it is wrapped as {"payload": payload}
-    so rule fields like "payload.country" resolve correctly.
+    No rules (or no valid rules) => True (always deliver). `payload` is wrapped as
+    {"payload": payload} so rule fields like "payload.country" resolve correctly.
     """
     if not rules:
-        return None
+        return True
     envelope = {"payload": payload}
+    results: list[bool] = []
     for rule in rules:
         operator = rule.get("operator")
         if operator not in _OPERATORS:
-            continue
+            continue  # skip malformed rules
         actual = extract_field(envelope, rule.get("field", ""))
-        if _compare(actual, operator, rule.get("value")):
-            return rule.get("action_url")
-    return None
+        results.append(_compare(actual, operator, rule.get("value")))
+    if not results:
+        return True  # no usable rules => don't block delivery
+    return all(results) if mode == "all" else any(results)

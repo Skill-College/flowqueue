@@ -48,6 +48,14 @@ services:
       RUN_WORKERS: '1'
     command: ['python', '-m', 'app.workers.runner']
 
+  # Web UI: serves the React SPA and proxies /api -> app (single origin).
+  web:
+    build: ./web
+    depends_on:
+      - app
+    ports:
+      - '5173:80'
+
   nginx:
     image: nginx:1.25
     depends_on:

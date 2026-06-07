@@ -15,17 +15,13 @@ from app.models.consumer import Consumer, ConsumerType
 from app.schemas.consumer import ConsumerCreate, ConsumerUpdate
 from app.services.queue_service import get_queue
 
-_PUSH_TYPES = (ConsumerType.webhook, ConsumerType.workflow)
+_PUSH_TYPES = (ConsumerType.webhook,)
 
 
-def _validate_rules_and_endpoint(consumer_type: ConsumerType, endpoint_url, rules) -> None:
-    """SSRF-check the endpoint URL and every routing rule action_url."""
+def _validate_endpoint(endpoint_url) -> None:
+    """SSRF-check the single webhook endpoint URL (rules are filters, not URLs)."""
     if endpoint_url:
         validate_endpoint_url(endpoint_url)
-    for rule in rules or []:
-        action_url = rule["action_url"] if isinstance(rule, dict) else rule.action_url
-        if action_url:
-            validate_endpoint_url(action_url)
 
 
 async def create_consumer(
@@ -34,7 +30,7 @@ async def create_consumer(
     """Create a consumer on a queue. Validates endpoint/rule URLs for SSRF."""
     await get_queue(session, queue_id)
     rules = [r.model_dump() for r in data.routing_rules]
-    _validate_rules_and_endpoint(data.type, data.endpoint_url, rules)
+    _validate_endpoint(data.endpoint_url)
 
     consumer = Consumer(
         queue_id=queue_id,
@@ -42,6 +38,9 @@ async def create_consumer(
         type=data.type,
         endpoint_url=data.endpoint_url,
         routing_rules=rules,
+        match_mode=data.match_mode,
+        auto_complete=data.auto_complete,
+        signing_secret=data.signing_secret,
         meta=data.metadata,
     )
     session.add(consumer)
@@ -91,8 +90,7 @@ async def update_consumer(
             r.model_dump() if hasattr(r, "model_dump") else r for r in data.routing_rules
         ]
     new_endpoint = payload.get("endpoint_url", consumer.endpoint_url)
-    new_rules = payload.get("routing_rules", consumer.routing_rules)
-    _validate_rules_and_endpoint(consumer.type, new_endpoint, new_rules)
+    _validate_endpoint(new_endpoint)
 
     if "metadata" in payload:
         consumer.meta = payload.pop("metadata")

@@ -44,15 +44,46 @@ Every state transition writes a row to `delivery_logs` **in the same transaction
 when retention purges a message/delivery, the FK `ON DELETE SET NULL` keeps the log
 rows; the log body preserves the trail.
 
+## Web UI & user accounts
+
+A React + Vite + Tailwind SPA lives in `web/` and runs as its own container
+(`web`, nginx) that serves the build and proxies `/api` to the `app` service
+(single origin → no CORS, refresh cookie works).
+
+- **Open**: http://localhost:5173
+- **Multi-tenancy**: every queue is owned by a user. A user sees only their own
+  queues + everything nested under them. The **first registered account becomes
+  admin** (can see/manage all). Self-signup is open.
+- **Auth**: email + password → JWT access token (held in memory) + refresh token
+  (httpOnly cookie). API keys are scoped to the creating user and authenticate AS
+  that user (so SDK/programmatic access respects the same isolation).
+
+### Pages
+Dashboard (aggregate stats + chart), Queues (list/create), Queue detail
+(config + stats + Messages/Consumers tabs + publish dialog), Consumer detail
+(deliveries, poll, replay/backfill), Delivery detail (audit-log timeline with
+ack/complete/fail/remark), API Keys (create/revoke, token shown once), Admin →
+Users (admin only).
+
+### User CLI
+```bash
+docker compose exec app python -m app.cli create-user --email a@b.com --password secret --admin
+docker compose exec app python -m app.cli promote-admin --email a@b.com
+docker compose exec app python -m app.cli create-api-key --name dev --email a@b.com
+docker compose exec app python -m app.cli claim-orphans --email a@b.com   # assign pre-tenancy data
+```
+
 ## Quickstart
 
 ```bash
 # 1. Build and start everything (app auto-runs `alembic upgrade head`).
 docker compose up --build -d
 
-# 2. Mint the first API key (bootstrap — the API's create-key endpoint needs a key).
-docker compose exec app python -m app.cli create-api-key --name dev
+# 2. Create a user (first user becomes admin), then mint an API key for it.
+docker compose exec app python -m app.cli create-user --email dev@x.com --password password123 --admin
+docker compose exec app python -m app.cli create-api-key --name dev --email dev@x.com
 #   -> TOKEN (save now, shown once): fq_xxxxxxxx...
+# (Or just open http://localhost:5173 and register in the UI.)
 
 export TOKEN=fq_xxxxxxxx...
 export BASE=http://localhost:8000
@@ -86,23 +117,64 @@ curl -s $BASE/api/v1/deliveries/$DELIVERY/history -H "Authorization: Bearer $TOK
 Interactive docs: `http://localhost:8000/docs` (unauthenticated). Health:
 `http://localhost:8000/health`.
 
-## Conditional routing (webhook/workflow consumers)
+## Consumer types
 
-`routing_rules` is a JSONB array on the consumer; first matching rule wins, else
-`endpoint_url` is used. No `eval` — deterministic evaluation in
-`app/core/routing_engine.py`.
+| Type | Mode | How it gets work |
+|------|------|------------------|
+| `http` | pull | `POST /consumers/{id}/poll` claims the next delivery; then `complete`/`fail` |
+| `sdk` | pull | same as http, via the Python SDK (`FlowQueueConsumer`) |
+| `webhook` | push | `webhook_dispatcher` POSTs the payload to `endpoint_url` (routing-rule aware) |
+
+(`workflow` was removed — conditional push by payload is webhook `routing_rules`.)
+
+### Webhook `auto_complete`
+- **on** (default): HTTP 2xx → delivery `completed`; non-2xx → retry/fail.
+- **off**: 2xx leaves the delivery `processing`; your receiver must call back
+  `POST /deliveries/{id}/complete` (or `/fail`) using the `X-FlowQueue-Delivery-ID`
+  header. No callback before the visibility timeout → redelivered, then `failed` at
+  max retries. The consumer detail page shows copy-paste demo code per type.
+
+## Delivery filter rules (webhook consumers)
+
+`routing_rules` is a JSONB array of **filter conditions** on the consumer — they
+decide whether to deliver to the single `endpoint_url` (not multi-URL routing).
+`match_mode` is `any` (deliver if any rule matches) or `all` (deliver only if all
+match). No rules → always deliver. A message that matches no rule is **skipped** and
+its delivery marked `completed` (filtered). Deterministic, no `eval`
+(`app/core/routing_engine.py`).
 
 ```json
-[
-  {"field": "payload.country", "operator": "equals", "value": "IN",
-   "action_url": "https://api-india.example.com/hook"},
-  {"field": "payload.amount", "operator": "greater_than", "value": 1000,
-   "action_url": "https://high-value.example.com/hook"}
-]
+{
+  "match_mode": "all",
+  "routing_rules": [
+    {"field": "payload.country", "operator": "equals", "value": "IN"},
+    {"field": "payload.amount", "operator": "greater_than", "value": 1000}
+  ]
+}
 ```
 
 Operators: `equals`, `not_equals`, `contains`, `greater_than`, `less_than`.
-Endpoint and rule URLs are SSRF-checked (private/loopback/link-local IPs blocked).
+The `endpoint_url` is SSRF-checked (private/loopback/link-local IPs blocked).
+
+## Queues: publish guard, archive & restore
+
+- **Publish guard**: publishing to a queue with **zero active consumers** is rejected
+  with `409` — add/enable a consumer first (prevents orphan messages).
+- **Archive**: `DELETE /queues/{id}` soft-archives (`is_active=false`). Archived
+  queues reject publish. The UI Queues page has **Active** / **Archived** tabs.
+- **Restore**: `PATCH /queues/{id}` `{"is_active": true}` (Restore button in the UI).
+
+## UI theme
+
+Light/dark toggle in the sidebar (persisted to `localStorage`), bold Duolingo-style
+palette (green primary, high-contrast). Defaults to dark.
+
+## Enable / disable a consumer
+
+Deactivate: `DELETE /queues/{qid}/consumers/{cid}` (sets `is_active=false`).
+Re-enable: `PATCH /queues/{qid}/consumers/{cid}` with `{"is_active": true}`. The
+consumer detail page has an Enable/Disable toggle. Inactive consumers receive no new
+deliveries on publish.
 
 ## Replay
 

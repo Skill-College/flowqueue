@@ -46,6 +46,8 @@ class Message(Base):
     published_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # When set, deliveries are held (visible_after) until this time (scheduled/delayed).
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     queue: Mapped["Queue"] = relationship(back_populates="messages")  # noqa: F821

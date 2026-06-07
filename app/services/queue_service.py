@@ -15,16 +15,20 @@ from app.models.queue_sequence import QueueSequence
 from app.schemas.queue import QueueCreate, QueueStats, QueueUpdate
 
 
-async def create_queue(session: AsyncSession, data: QueueCreate) -> Queue:
-    """Create a queue and its per-queue sequence counter row."""
+async def create_queue(
+    session: AsyncSession, data: QueueCreate, owner_id: uuid.UUID | None = None
+) -> Queue:
+    """Create a queue (stamped with owner_id) and its per-queue sequence counter row."""
     queue = Queue(
         name=data.name,
+        owner_id=owner_id,
         fifo_enabled=data.fifo_enabled,
         max_retries=data.max_retries,
         retry_delay_seconds=data.retry_delay_seconds,
         retention_seconds=data.retention_seconds,
         processed_retention_seconds=data.processed_retention_seconds,
         visibility_timeout_seconds=data.visibility_timeout_seconds,
+        dlq_enabled=data.dlq_enabled,
         meta=data.metadata,
     )
     session.add(queue)
@@ -52,11 +56,30 @@ async def get_active_queue(session: AsyncSession, queue_id: uuid.UUID) -> Queue:
     return queue
 
 
-async def list_queues(session: AsyncSession, limit: int, offset: int) -> tuple[list[Queue], int]:
-    total = (await session.execute(select(func.count()).select_from(Queue))).scalar_one()
+async def list_queues(
+    session: AsyncSession,
+    limit: int,
+    offset: int,
+    owner_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+) -> tuple[list[Queue], int]:
+    """List queues. owner_id restricts to that owner (admin passes None). is_active
+    filters active vs archived (None = both)."""
+    filters = []
+    if owner_id is not None:
+        filters.append(Queue.owner_id == owner_id)
+    if is_active is not None:
+        filters.append(Queue.is_active.is_(is_active))
+    total = (
+        await session.execute(select(func.count()).select_from(Queue).where(*filters))
+    ).scalar_one()
     rows = (
         await session.execute(
-            select(Queue).order_by(Queue.created_at.desc()).limit(limit).offset(offset)
+            select(Queue)
+            .where(*filters)
+            .order_by(Queue.created_at.desc())
+            .limit(limit)
+            .offset(offset)
         )
     ).scalars().all()
     return list(rows), total
@@ -69,6 +92,14 @@ async def update_queue(session: AsyncSession, queue_id: uuid.UUID, data: QueueUp
         queue.meta = payload.pop("metadata")
     for field, value in payload.items():
         setattr(queue, field, value)
+    await session.flush()
+    return queue
+
+
+async def set_paused(session: AsyncSession, queue_id: uuid.UUID, paused: bool) -> Queue:
+    """Pause/resume a queue. Paused queues stop dispatch + poll (publish still allowed)."""
+    queue = await get_queue(session, queue_id)
+    queue.is_paused = paused
     await session.flush()
     return queue
 

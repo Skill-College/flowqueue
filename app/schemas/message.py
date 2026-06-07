@@ -9,6 +9,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class MessageCreate(BaseModel):
     payload: dict
     idempotency_key: str | None = Field(default=None, max_length=512)
+    # Scheduled/delayed delivery: hold until deliver_at (absolute) or now+delay_seconds.
+    deliver_at: datetime | None = None
+    delay_seconds: int | None = Field(default=None, ge=0)
 
 
 class MessageOut(BaseModel):
@@ -20,6 +23,7 @@ class MessageOut(BaseModel):
     idempotency_key: str | None
     sequence_num: int
     published_at: datetime
+    scheduled_for: datetime | None = None
     expires_at: datetime
 
 

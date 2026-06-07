@@ -1,0 +1,34 @@
+[project]
+name = "flowqueue"
+version = "0.1.0"
+description = "Python client SDK for FlowQueue — a cloud-native message processing platform"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+authors = [{ name = "FlowQueue" }]
+keywords = ["queue", "messaging", "webhook", "delivery", "dlq", "flowqueue"]
+dependencies = ["httpx>=0.27"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/flowqueue"
+Repository = "https://github.com/your-org/flowqueue"
+Documentation = "https://github.com/your-org/flowqueue#readme"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["flowqueue*"]

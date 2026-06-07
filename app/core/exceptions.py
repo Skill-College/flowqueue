@@ -44,6 +44,11 @@ class AuthError(FlowQueueError):
     code = "unauthorized"
 
 
+class ForbiddenError(FlowQueueError):
+    status_code = status.HTTP_403_FORBIDDEN
+    code = "forbidden"
+
+
 def _handler(request: Request, exc: FlowQueueError) -> JSONResponse:
     return JSONResponse(
         status_code=exc.status_code,

@@ -1,7 +1,7 @@
 [project]
-name = "flowqueue"
+name = "flowqueue-server"
 version = "0.1.0"
-description = "FlowQueue — cloud-native message processing platform"
+description = "FlowQueue — cloud-native message processing platform (server). The PyPI 'flowqueue' package is the client SDK in ./sdk."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -10,8 +10,9 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.29",
     "asyncpg>=0.29",
     "alembic>=1.13",
-    "pydantic>=2.6",
+    "pydantic[email]>=2.6",
     "pydantic-settings>=2.2",
+    "pyjwt>=2.8",
     "apscheduler>=3.10",
     "httpx>=0.27",
     "bcrypt>=4.1",

@@ -31,8 +31,10 @@ def _delivery(attempt=0):
     )
 
 
-def _queue(max_retries=3, retry_delay=60):
-    return SimpleNamespace(max_retries=max_retries, retry_delay_seconds=retry_delay)
+def _queue(max_retries=3, retry_delay=60, dlq_enabled=True):
+    return SimpleNamespace(
+        max_retries=max_retries, retry_delay_seconds=retry_delay, dlq_enabled=dlq_enabled
+    )
 
 
 def test_retry_scheduled_when_attempts_remain():
@@ -46,8 +48,18 @@ def test_retry_scheduled_when_attempts_remain():
     assert log.to_status == "pending"
 
 
-def test_marked_failed_when_retries_exhausted():
-    session, d, q = FakeSession(), _delivery(attempt=2), _queue(max_retries=3)
+def test_dead_lettered_when_retries_exhausted_and_dlq_on():
+    session, d, q = FakeSession(), _delivery(attempt=2), _queue(max_retries=3, dlq_enabled=True)
+    delivery_service.apply_failure(session, d, q, remark="boom")
+    assert d.attempt_count == 3
+    assert d.status == DeliveryStatus.dead
+    log = session.added[-1]
+    assert log.event_type == "dead_lettered"
+    assert log.to_status == "dead"
+
+
+def test_marked_failed_when_retries_exhausted_and_dlq_off():
+    session, d, q = FakeSession(), _delivery(attempt=2), _queue(max_retries=3, dlq_enabled=False)
     delivery_service.apply_failure(session, d, q, remark="boom")
     assert d.attempt_count == 3
     assert d.status == DeliveryStatus.failed

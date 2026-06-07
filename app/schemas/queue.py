@@ -14,6 +14,7 @@ class QueueCreate(BaseModel):
     retention_seconds: int = Field(default=604800, ge=1)
     processed_retention_seconds: int = Field(default=2592000, ge=1)
     visibility_timeout_seconds: int = Field(default=30, ge=1)
+    dlq_enabled: bool = True
     metadata: dict = Field(default_factory=dict)
 
 
@@ -24,6 +25,8 @@ class QueueUpdate(BaseModel):
     retention_seconds: int | None = Field(default=None, ge=1)
     processed_retention_seconds: int | None = Field(default=None, ge=1)
     visibility_timeout_seconds: int | None = Field(default=None, ge=1)
+    dlq_enabled: bool | None = None
+    is_paused: bool | None = None
     metadata: dict | None = None
     is_active: bool | None = None
 
@@ -33,12 +36,15 @@ class QueueOut(BaseModel):
 
     id: uuid.UUID
     name: str
+    owner_id: uuid.UUID | None = None
     fifo_enabled: bool
     max_retries: int
     retry_delay_seconds: int
     retention_seconds: int
     processed_retention_seconds: int
     visibility_timeout_seconds: int
+    dlq_enabled: bool
+    is_paused: bool
     metadata: dict = Field(validation_alias="meta", serialization_alias="metadata")
     is_active: bool
     created_at: datetime

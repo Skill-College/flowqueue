@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Light theme — bold, high-contrast, Duolingo-style palette */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 200 18% 18%;
+  --card: 0 0% 100%;
+  --card-foreground: 200 18% 18%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 200 18% 18%;
+  --primary: 89 84% 40%;            /* Duo green #58CC02 */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 200 30% 95%;
+  --secondary-foreground: 200 18% 22%;
+  --muted: 200 25% 95%;
+  --muted-foreground: 200 10% 42%;
+  --accent: 199 92% 94%;
+  --accent-foreground: 200 18% 18%;
+  --destructive: 0 100% 65%;        /* Duo red #FF4B4B */
+  --destructive-foreground: 0 0% 100%;
+  --border: 200 18% 86%;
+  --input: 200 18% 82%;
+  --ring: 89 84% 40%;
+  --radius: 0.9rem;
+}
+
+/* Dark theme — Duolingo "Night Owl" deep teal */
+.dark {
+  --background: 197 33% 11%;        /* #131F24 */
+  --foreground: 0 0% 98%;
+  --card: 197 27% 16%;             /* #202F36 */
+  --card-foreground: 0 0% 98%;
+  --popover: 197 27% 16%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 89 84% 46%;
+  --primary-foreground: 197 40% 8%;
+  --secondary: 197 20% 23%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 197 18% 21%;
+  --muted-foreground: 200 14% 66%;
+  --accent: 199 60% 24%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 90% 63%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 197 18% 25%;
+  --input: 197 18% 27%;
+  --ring: 89 84% 46%;
+  --radius: 0.9rem;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }

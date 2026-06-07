@@ -8,9 +8,12 @@ from app.models.message import Message
 from app.models.queue import Queue
 from app.models.queue_sequence import QueueSequence
 from app.models.replay_request import ReplayRequest, ReplayStatus, ReplayType
+from app.models.user import User, UserRole
 
 __all__ = [
     "ApiKey",
+    "User",
+    "UserRole",
     "Consumer",
     "ConsumerType",
     "Delivery",

@@ -25,6 +25,7 @@ class DeliveryStatus(str, enum.Enum):
     processing = "processing"
     completed = "completed"
     failed = "failed"
+    dead = "dead"  # retries exhausted, moved to dead-letter queue
 
 
 class Delivery(Base):

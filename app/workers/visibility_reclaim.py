@@ -24,11 +24,16 @@ async def run_once() -> int:
             await session.execute(
                 text(
                     """
-                    SELECT id FROM deliveries
-                    WHERE status = 'processing' AND visible_after < now()
-                    ORDER BY visible_after ASC
+                    SELECT d.id FROM deliveries d
+                    JOIN consumers c ON c.id = d.consumer_id
+                    JOIN queues q ON q.id = c.queue_id
+                    WHERE d.status = 'processing' AND d.visible_after < now()
+                      AND c.is_active = true
+                      AND q.is_active = true
+                      AND q.is_paused = false
+                    ORDER BY d.visible_after ASC
                     LIMIT :batch
-                    FOR UPDATE SKIP LOCKED
+                    FOR UPDATE OF d SKIP LOCKED
                     """
                 ),
                 {"batch": BATCH},

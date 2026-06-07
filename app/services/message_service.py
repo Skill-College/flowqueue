@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError
 from app.models.consumer import Consumer
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.message import Message
@@ -81,14 +81,33 @@ async def publish_message(
         if existing is not None:
             return existing, False
 
+    # Require at least one active consumer so messages aren't published into the void.
+    active_consumers = (
+        await session.execute(
+            select(func.count())
+            .select_from(Consumer)
+            .where(Consumer.queue_id == queue_id, Consumer.is_active.is_(True))
+        )
+    ).scalar_one()
+    if active_consumers == 0:
+        raise ConflictError("Queue has no active consumers; add one before publishing")
+
     seq = await _next_sequence(session, queue_id)
     now = datetime.now(timezone.utc)
+
+    # Scheduled/delayed delivery: hold until deliver_at or now+delay_seconds.
+    scheduled_for: datetime | None = data.deliver_at
+    if scheduled_for is None and data.delay_seconds:
+        scheduled_for = now + timedelta(seconds=data.delay_seconds)
+    visible_after = scheduled_for if scheduled_for and scheduled_for > now else now
+
     message = Message(
         queue_id=queue_id,
         payload=data.payload,
         idempotency_key=data.idempotency_key,
         sequence_num=seq,
         published_at=now,
+        scheduled_for=scheduled_for,
         expires_at=now + timedelta(seconds=queue.retention_seconds),
     )
     session.add(message)
@@ -107,7 +126,7 @@ async def publish_message(
             message_id=message.id,
             consumer_id=consumer.id,
             status=DeliveryStatus.pending,
-            visible_after=now,
+            visible_after=visible_after,
         )
         session.add(delivery)
         await session.flush()  # assign delivery.id before logging

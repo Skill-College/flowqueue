@@ -13,7 +13,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models.consumer import Consumer
+from app.models.consumer import Consumer, ConsumerType
 from app.models.delivery import Delivery, DeliveryStatus
 from app.models.message import Message
 from app.models.queue import Queue
@@ -58,7 +58,15 @@ async def poll_next(session: AsyncSession, consumer_id: uuid.UUID) -> dict | Non
     consumer = await session.get(Consumer, consumer_id)
     if consumer is None:
         raise NotFoundError(f"Consumer not found: {consumer_id}")
+    # Only pull consumers (http/sdk) may poll. Webhook deliveries are owned by the
+    # dispatcher; polling them would race it and double-deliver.
+    if consumer.type not in (ConsumerType.http, ConsumerType.sdk):
+        raise ConflictError(f"Consumer type '{consumer.type.value}' cannot poll (push consumer)")
+    if not consumer.is_active:
+        raise ConflictError("Consumer is inactive")
     queue = await session.get(Queue, consumer.queue_id)
+    if queue.is_paused:
+        return None  # paused queue: nothing to hand out
 
     order_clause = (
         "m.sequence_num ASC" if queue.fifo_enabled else "d.visible_after ASC, d.created_at ASC"
@@ -171,6 +179,10 @@ def apply_failure(
     """Shared retry-or-fail logic. Increments attempt_count, then either schedules
     a retry (status pending, delayed) or marks failed when retries are exhausted.
 
+    Semantics: `queue.max_retries` is the max TOTAL delivery attempts. attempt_count
+    starts at 0; each failure increments it; when it reaches max_retries the delivery
+    is terminal. (e.g. max_retries=3 => up to 3 attempts.)
+
     Writes to audit log: one `retry_scheduled` row (on retry) or one
     `status_updated` row (-> failed). Synchronous (no flush) so callers control txn.
     """
@@ -192,15 +204,22 @@ def apply_failure(
         delivery.status = DeliveryStatus.pending
         delivery.visible_after = _now() + timedelta(seconds=queue.retry_delay_seconds)
     else:
+        # Retries exhausted. Route to DLQ ('dead') when enabled, else terminal 'failed'.
+        terminal = DeliveryStatus.dead if queue.dlq_enabled else DeliveryStatus.failed
+        event = (
+            audit_service.EVENT_DEAD_LETTERED
+            if terminal == DeliveryStatus.dead
+            else audit_service.EVENT_STATUS_UPDATED
+        )
         audit_service.log_transition(
             session,
             delivery,
-            event_type=audit_service.EVENT_STATUS_UPDATED,
-            to_status=DeliveryStatus.failed,
+            event_type=event,
+            to_status=terminal,
             remark=remark,
             context={**(context or {}), "attempt_count": delivery.attempt_count},
         )
-        delivery.status = DeliveryStatus.failed
+        delivery.status = terminal
     return delivery
 
 
@@ -255,6 +274,65 @@ async def delivery_history(session: AsyncSession, delivery_id: uuid.UUID):
         )
     ).scalars().all()
     return list(rows)
+
+
+async def list_dlq(
+    session: AsyncSession, queue_id: uuid.UUID, limit: int, offset: int
+) -> tuple[list[Delivery], int]:
+    """List dead-lettered deliveries for a queue (status='dead')."""
+    base = (
+        select(Delivery)
+        .join(Message, Message.id == Delivery.message_id)
+        .where(Message.queue_id == queue_id, Delivery.status == DeliveryStatus.dead)
+    )
+    total = (
+        await session.execute(
+            select(func.count())
+            .select_from(Delivery)
+            .join(Message, Message.id == Delivery.message_id)
+            .where(Message.queue_id == queue_id, Delivery.status == DeliveryStatus.dead)
+        )
+    ).scalar_one()
+    rows = (
+        await session.execute(
+            base.order_by(Delivery.updated_at.desc()).limit(limit).offset(offset)
+        )
+    ).scalars().all()
+    return list(rows), total
+
+
+def requeue(session: AsyncSession, delivery: Delivery) -> Delivery:
+    """Reset a delivery back to pending (attempt_count=0) for redelivery.
+
+    Writes to audit log: one `requeued` row. Synchronous (caller commits).
+    """
+    audit_service.log_transition(
+        session,
+        delivery,
+        event_type=audit_service.EVENT_REQUEUED,
+        to_status=DeliveryStatus.pending,
+    )
+    delivery.status = DeliveryStatus.pending
+    delivery.attempt_count = 0
+    delivery.visible_after = _now()
+    delivery.completed_at = None
+    return delivery
+
+
+def discard(session: AsyncSession, delivery: Delivery) -> Delivery:
+    """Dismiss a dead delivery (mark failed, removed from the DLQ view).
+
+    Writes to audit log: one `discarded` row.
+    """
+    audit_service.log_transition(
+        session,
+        delivery,
+        event_type=audit_service.EVENT_DISCARDED,
+        to_status=DeliveryStatus.failed,
+        remark="discarded from DLQ",
+    )
+    delivery.status = DeliveryStatus.failed
+    return delivery
 
 
 async def list_consumer_deliveries(

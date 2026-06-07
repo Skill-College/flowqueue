@@ -6,8 +6,12 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+Scope = Field(default_factory=lambda: ["publish", "consume", "admin"])
+
+
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    scopes: list[str] = Scope
 
 
 class ApiKeyOut(BaseModel):
@@ -16,6 +20,7 @@ class ApiKeyOut(BaseModel):
     id: uuid.UUID
     name: str
     prefix: str
+    scopes: list[str]
     is_active: bool
     created_at: datetime
     last_used_at: datetime | None
