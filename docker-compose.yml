@@ -56,17 +56,5 @@ services:
     ports:
       - '5173:80'
 
-  nginx:
-    image: nginx:1.25
-    depends_on:
-      - app
-    volumes:
-      - ./nginx/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
-    environment:
-      APP_UPSTREAM: app:8000
-    ports:
-      - '8090:80'
-      - '443:443'
-
 volumes:
   pgdata:
