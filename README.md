@@ -1,5 +1,9 @@
 # FlowQueue
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 Cloud-native message processing platform. Durable queues, per-consumer delivery
 lifecycle with retries + visibility timeouts, conditional webhook routing, replay /
 backfill, and a tamper-evident append-only audit log. FastAPI + PostgreSQL (async
@@ -233,3 +237,14 @@ Bearer token in `Authorization`. Keys are stored bcrypt-hashed in `api_keys`
 (only a short non-secret prefix is indexed for lookup). All `/api/v1/*` routes
 require a valid key; `/health` and `/docs` do not. Bootstrap the first key with the
 CLI, then mint more via `POST /api/v1/api-keys`.
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup and
+guidelines, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). For security issues, follow
+[SECURITY.md](SECURITY.md) — do not open a public issue.
+
+## License
+
+MIT — see [LICENSE](LICENSE). The Python client SDK (`./sdk`, published to PyPI as
+`flowqueue`) is also MIT.

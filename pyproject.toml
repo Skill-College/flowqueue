@@ -4,6 +4,18 @@ version = "0.1.0"
 description = "FlowQueue — cloud-native message processing platform (server). The PyPI 'flowqueue' package is the client SDK in ./sdk."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Skill.College" }]
+keywords = ["queue", "messaging", "webhook", "delivery", "dlq", "fastapi", "flowqueue"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
@@ -26,6 +38,12 @@ dev = [
     "pytest-asyncio>=0.23",
     "anyio>=4.3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Skill-College/flowqueue"
+Repository = "https://github.com/Skill-College/flowqueue"
+Documentation = "https://github.com/Skill-College/flowqueue#readme"
+Issues = "https://github.com/Skill-College/flowqueue/issues"
 
 [project.scripts]
 flowqueue = "app.cli:cli"

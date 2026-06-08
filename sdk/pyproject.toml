@@ -5,7 +5,7 @@ description = "Python client SDK for FlowQueue — a cloud-native message proces
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.8"
-authors = [{ name = "FlowQueue" }]
+authors = [{ name = "Skill.College" }]
 keywords = ["queue", "messaging", "webhook", "delivery", "dlq", "flowqueue"]
 dependencies = ["httpx>=0.27"]
 classifiers = [
@@ -19,9 +19,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/flowqueue"
-Repository = "https://github.com/your-org/flowqueue"
-Documentation = "https://github.com/your-org/flowqueue#readme"
+Homepage = "https://github.com/Skill-College/flowqueue"
+Repository = "https://github.com/Skill-College/flowqueue"
+Documentation = "https://github.com/Skill-College/flowqueue#readme"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
