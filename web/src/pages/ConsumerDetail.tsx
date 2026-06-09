@@ -7,6 +7,7 @@ import api, { apiErrorMessage } from "@/lib/api";
 import type { Consumer, Delivery, DeliveryStatus, Page, RoutingRule } from "@/lib/types";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge, StatusBadge } from "@/components/ui/badge";
 import { Select } from "@/components/ui/select";
@@ -244,13 +245,21 @@ export function ConsumerDetail() {
                 <Send size={16} /> Send test
               </Button>
             )}
-            {consumer && (
-              <Button
-                variant={consumer.is_active ? "outline" : "default"}
-                onClick={() => toggleActive.mutate()}
+            {consumer && consumer.is_active && (
+              <ConfirmButton
+                variant="outline"
+                title="Disable consumer"
+                description={`"${consumer.name}" will stop receiving new deliveries until re-enabled.`}
+                confirmLabel="Disable"
                 disabled={toggleActive.isPending}
+                onConfirm={() => toggleActive.mutate()}
               >
-                <Power size={16} /> {consumer.is_active ? "Disable" : "Enable"}
+                <Power size={16} /> Disable
+              </ConfirmButton>
+            )}
+            {consumer && !consumer.is_active && (
+              <Button variant="default" onClick={() => toggleActive.mutate()} disabled={toggleActive.isPending}>
+                <Power size={16} /> Enable
               </Button>
             )}
             {isPull && (
@@ -258,12 +267,26 @@ export function ConsumerDetail() {
                 <Download size={16} /> Poll next
               </Button>
             )}
-            <Button variant="outline" onClick={() => replayFailed.mutate()} disabled={replayFailed.isPending}>
+            <ConfirmButton
+              variant="outline"
+              title="Replay failed deliveries"
+              description="Re-enqueues every failed delivery for this consumer. They will be delivered again."
+              confirmLabel="Replay failed"
+              disabled={replayFailed.isPending}
+              onConfirm={() => replayFailed.mutate()}
+            >
               <RefreshCw size={16} /> Replay failed
-            </Button>
-            <Button variant="outline" onClick={() => backfill.mutate()} disabled={backfill.isPending}>
+            </ConfirmButton>
+            <ConfirmButton
+              variant="outline"
+              title="Backfill deliveries"
+              description="Creates deliveries for past messages this consumer never received. This can enqueue a large batch."
+              confirmLabel="Backfill"
+              disabled={backfill.isPending}
+              onConfirm={() => backfill.mutate()}
+            >
               <History size={16} /> Backfill
-            </Button>
+            </ConfirmButton>
           </div>
         }
       />

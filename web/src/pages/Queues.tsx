@@ -7,6 +7,7 @@ import api, { apiErrorMessage } from "@/lib/api";
 import type { Page, Queue } from "@/lib/types";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -162,9 +163,16 @@ export function Queues() {
                             <RotateCcw size={14} /> Restore
                           </Button>
                         ) : (
-                          <Button variant="ghost" size="sm" onClick={() => archive.mutate(q.id)}>
+                          <ConfirmButton
+                            variant="ghost"
+                            size="sm"
+                            title="Archive queue"
+                            description={`Archiving "${q.name}" blocks publishing until restored. Existing messages are kept.`}
+                            confirmLabel="Archive"
+                            onConfirm={() => archive.mutate(q.id)}
+                          >
                             <Archive size={14} className="text-amber-500" /> Archive
-                          </Button>
+                          </ConfirmButton>
                         )}
                       </div>
                     </TD>

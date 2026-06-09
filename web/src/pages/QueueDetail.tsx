@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Send, ArrowRight, ChevronLeft, Trash2, Archive, RotateCcw, Pencil, Pause, Play } from "lucide-react";
+import { Plus, Send, ArrowRight, ChevronLeft, Trash2, Archive, RotateCcw, Pencil, Pause, Play, Copy, Check } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api, { apiErrorMessage } from "@/lib/api";
 import type { Consumer, ConsumerType, Delivery, Message, Page, Queue, QueueLog, QueueStats, RoutingRule } from "@/lib/types";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,7 +19,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { JsonView } from "@/components/JsonView";
-import { formatDate, buildCustomHeaders } from "@/lib/utils";
+import { formatDate, buildCustomHeaders, copy } from "@/lib/utils";
 
 const queueActionColors: Record<string, string> = {
   queue_created: "bg-primary",
@@ -142,16 +143,35 @@ export function QueueDetail() {
                 <Button variant="ghost" onClick={() => setEditOpen(true)}>
                   <Pencil size={16} /> Edit
                 </Button>
-                <Button variant="ghost" onClick={() => pauseToggle.mutate()} disabled={pauseToggle.isPending}>
-                  {queue?.is_paused ? <Play size={16} className="text-emerald-500" /> : <Pause size={16} className="text-amber-500" />}
-                  {queue?.is_paused ? "Resume" : "Pause"}
-                </Button>
+                {queue?.is_paused ? (
+                  <Button variant="ghost" onClick={() => pauseToggle.mutate()} disabled={pauseToggle.isPending}>
+                    <Play size={16} className="text-emerald-500" /> Resume
+                  </Button>
+                ) : (
+                  <ConfirmButton
+                    variant="ghost"
+                    title="Pause queue"
+                    description="Pausing stops delivery (poll + webhook dispatch). Publishing still works; messages queue up until you resume."
+                    confirmLabel="Pause"
+                    disabled={pauseToggle.isPending}
+                    onConfirm={() => pauseToggle.mutate()}
+                  >
+                    <Pause size={16} className="text-amber-500" /> Pause
+                  </ConfirmButton>
+                )}
                 <Button variant="ghost" onClick={() => setPurgeOpen(true)}>
                   <Trash2 size={16} className="text-red-500" /> Purge
                 </Button>
-                <Button variant="ghost" onClick={() => archive.mutate()} disabled={archive.isPending}>
+                <ConfirmButton
+                  variant="ghost"
+                  title="Archive queue"
+                  description={`Archiving "${queue?.name ?? ""}" blocks publishing until restored. Existing messages are kept.`}
+                  confirmLabel="Archive"
+                  disabled={archive.isPending}
+                  onConfirm={() => archive.mutate()}
+                >
                   <Archive size={16} className="text-amber-500" /> Archive
-                </Button>
+                </ConfirmButton>
               </>
             )}
           </div>
@@ -212,6 +232,7 @@ export function QueueDetail() {
           </Card>
         </div>
       )}
+      {tab === "overview" && <PublishSnippet queueId={queueId} />}
 
       {tab === "consumers" && (
         <Card>
@@ -341,6 +362,68 @@ export function QueueDetail() {
   );
 }
 
+function CodeBlock({ code }: { code: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <div className="relative">
+      <pre className="max-h-80 overflow-auto rounded-lg border border-border bg-background/60 p-3 pr-10 text-xs leading-relaxed">
+        <code>{code}</code>
+      </pre>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="absolute right-2 top-2 h-7 w-7"
+        onClick={async () => {
+          await copy(code);
+          setDone(true);
+          setTimeout(() => setDone(false), 1200);
+        }}
+      >
+        {done ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+      </Button>
+    </div>
+  );
+}
+
+function PublishSnippet({ queueId }: { queueId: string }) {
+  const base = window.location.origin;
+  const [lang, setLang] = useState<"curl" | "python">("curl");
+  const curl = `curl -X POST "${base}/api/v1/queues/${queueId}/messages" \\
+  -H "Authorization: Bearer fq_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{"payload": {"order_id": 42}, "idempotency_key": "order-42"}'`;
+  const python = `import asyncio
+from flowqueue import AsyncFlowQueueClient
+
+async def main():
+    async with AsyncFlowQueueClient("${base}", "fq_your_api_key") as client:
+        await client.publish("${queueId}", {"order_id": 42}, idempotency_key="order-42")
+
+asyncio.run(main())`;
+  return (
+    <Card className="mt-6">
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <CardTitle>Publish a message</CardTitle>
+        <div className="flex gap-1">
+          <Button size="sm" variant={lang === "curl" ? "default" : "outline"} onClick={() => setLang("curl")}>
+            curl
+          </Button>
+          <Button size="sm" variant={lang === "python" ? "default" : "outline"} onClick={() => setLang("python")}>
+            Python
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <CodeBlock code={lang === "curl" ? curl : python} />
+        <p className="mt-3 text-xs text-muted-foreground">
+          Create an API key under <Link to="/api-keys" className="text-primary hover:underline">API Keys</Link>.
+          Prefer a UI? Use the <span className="font-medium text-foreground">Publish</span> button above.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TimeseriesCard({ queueId }: { queueId: string }) {
   const { data } = useQuery({
     queryKey: ["timeseries", queueId],
@@ -415,9 +498,16 @@ function DlqTab({ queueId }: { queueId: string }) {
         <div className="mb-3 flex items-center justify-between">
           <Badge>{data?.total ?? 0} dead</Badge>
           {(data?.total ?? 0) > 0 && (
-            <Button size="sm" variant="outline" onClick={() => requeueAll.mutate()}>
+            <ConfirmButton
+              size="sm"
+              variant="outline"
+              title="Requeue all dead letters"
+              description={`Re-enqueues all ${data?.total ?? 0} dead-lettered deliveries for another attempt.`}
+              confirmLabel="Requeue all"
+              onConfirm={() => requeueAll.mutate()}
+            >
               <RotateCcw size={14} /> Requeue all
-            </Button>
+            </ConfirmButton>
           )}
         </div>
         {data && data.items.length > 0 ? (
@@ -436,9 +526,17 @@ function DlqTab({ queueId }: { queueId: string }) {
                       <Button size="sm" variant="ghost" onClick={() => requeue.mutate(d.id)}>
                         <RotateCcw size={14} /> Requeue
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => discard.mutate(d.id)}>
+                      <ConfirmButton
+                        size="sm"
+                        variant="ghost"
+                        destructive
+                        title="Discard delivery"
+                        description="Permanently drops this dead-lettered delivery. It will not be retried."
+                        confirmLabel="Discard"
+                        onConfirm={() => discard.mutate(d.id)}
+                      >
                         <Trash2 size={14} className="text-red-400" /> Discard
-                      </Button>
+                      </ConfirmButton>
                     </div>
                   </TD>
                 </TR>

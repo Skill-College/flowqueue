@@ -6,6 +6,7 @@ import api, { apiErrorMessage } from "@/lib/api";
 import type { ApiKey, ApiKeyCreated } from "@/lib/types";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -95,9 +96,19 @@ export function ApiKeys() {
                     <TD className="text-muted-foreground">{formatDate(k.created_at)}</TD>
                     <TD>
                       {k.is_active && (
-                        <Button variant="ghost" size="sm" onClick={() => revoke.mutate(k.id)}>
+                        <ConfirmButton
+                          variant="ghost"
+                          size="sm"
+                          destructive
+                          title="Revoke API key"
+                          description={`Revoking "${k.name}" immediately breaks any client using it. This cannot be undone.`}
+                          confirmText={k.name}
+                          confirmTextLabel="Type the key name to confirm:"
+                          confirmLabel="Revoke key"
+                          onConfirm={() => revoke.mutate(k.id)}
+                        >
                           <Trash2 size={14} className="text-red-400" />
-                        </Button>
+                        </ConfirmButton>
                       )}
                     </TD>
                   </TR>
