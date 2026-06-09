@@ -5,7 +5,7 @@ import { Plus, Send, ArrowRight, ChevronLeft, Trash2, Archive, RotateCcw, Pencil
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { toast } from "sonner";
 import api, { apiErrorMessage } from "@/lib/api";
-import type { Consumer, ConsumerType, Delivery, Message, Page, Queue, QueueStats, RoutingRule } from "@/lib/types";
+import type { Consumer, ConsumerType, Delivery, Message, Page, Queue, QueueLog, QueueStats, RoutingRule } from "@/lib/types";
 import { PageHeader } from "@/components/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,18 @@ import { Tabs } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { JsonView } from "@/components/JsonView";
-import { formatDate } from "@/lib/utils";
+import { formatDate, buildCustomHeaders } from "@/lib/utils";
+
+const queueActionColors: Record<string, string> = {
+  queue_created: "bg-primary",
+  queue_updated: "bg-sky-400",
+  queue_paused: "bg-amber-400",
+  queue_resumed: "bg-emerald-400",
+  queue_archived: "bg-amber-500",
+  queue_restored: "bg-emerald-500",
+  queue_purged: "bg-red-500",
+  messages_expired: "bg-rose-400",
+};
 
 export function QueueDetail() {
   const { queueId = "" } = useParams();
@@ -27,6 +38,8 @@ export function QueueDetail() {
   const [pubOpen, setPubOpen] = useState(false);
   const [consOpen, setConsOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [purgeOpen, setPurgeOpen] = useState(false);
+  const [tlAction, setTlAction] = useState("");
 
   const queueQ = useQuery({
     queryKey: ["queue", queueId],
@@ -47,6 +60,17 @@ export function QueueDetail() {
     queryFn: async () =>
       (await api.get<Page<Consumer>>(`/queues/${queueId}/consumers`, { params: { limit: 50 } })).data,
     enabled: tab === "consumers" || tab === "overview",
+  });
+
+  const timelineQ = useQuery({
+    queryKey: ["queue-timeline", queueId, tlAction],
+    queryFn: async () =>
+      (
+        await api.get<Page<QueueLog>>(`/queues/${queueId}/timeline`, {
+          params: { limit: 100, ...(tlAction ? { action: tlAction } : {}) },
+        })
+      ).data,
+    enabled: tab === "timeline",
   });
 
   const queue = queueQ.data;
@@ -76,6 +100,19 @@ export function QueueDetail() {
     onSuccess: () => {
       toast.success(queue?.is_paused ? "Queue resumed" : "Queue paused");
       qc.invalidateQueries({ queryKey: ["queue", queueId] });
+      qc.invalidateQueries({ queryKey: ["queue-timeline", queueId] });
+    },
+    onError: (e) => toast.error(apiErrorMessage(e)),
+  });
+  const purge = useMutation({
+    mutationFn: async () =>
+      (await api.post<{ deliveries: number; messages: number }>(`/queues/${queueId}/purge`)).data,
+    onSuccess: (data) => {
+      toast.success(`Purged ${data.messages} pending messages`);
+      setPurgeOpen(false);
+      qc.invalidateQueries({ queryKey: ["queue-stats", queueId] });
+      qc.invalidateQueries({ queryKey: ["messages", queueId] });
+      qc.invalidateQueries({ queryKey: ["queue-timeline", queueId] });
     },
     onError: (e) => toast.error(apiErrorMessage(e)),
   });
@@ -108,6 +145,9 @@ export function QueueDetail() {
                 <Button variant="ghost" onClick={() => pauseToggle.mutate()} disabled={pauseToggle.isPending}>
                   {queue?.is_paused ? <Play size={16} className="text-emerald-500" /> : <Pause size={16} className="text-amber-500" />}
                   {queue?.is_paused ? "Resume" : "Pause"}
+                </Button>
+                <Button variant="ghost" onClick={() => setPurgeOpen(true)}>
+                  <Trash2 size={16} className="text-red-500" /> Purge
                 </Button>
                 <Button variant="ghost" onClick={() => archive.mutate()} disabled={archive.isPending}>
                   <Archive size={16} className="text-amber-500" /> Archive
@@ -145,6 +185,7 @@ export function QueueDetail() {
           { id: "consumers", label: "Consumers" },
           { id: "messages", label: "Messages" },
           { id: "dlq", label: "Dead Letter" },
+          { id: "timeline", label: "Timeline" },
         ]}
       />
 
@@ -156,7 +197,9 @@ export function QueueDetail() {
             <CardContent className="space-y-2 text-sm">
               <Row k="Total messages" v={stats?.total_messages} />
               <Row k="Consumers" v={stats?.consumer_count} />
-              <Row k="Retention" v={queue ? `${queue.retention_seconds}s` : "—"} />
+              <Row k="Pending retention" v={queue ? `${queue.retention_seconds}s` : "—"} />
+              <Row k="Success retention" v={queue ? `${queue.success_retention_seconds}s` : "—"} />
+              <Row k="Failed retention" v={queue ? `${queue.failed_retention_seconds}s` : "—"} />
               <Row k="Retry delay" v={queue ? `${queue.retry_delay_seconds}s` : "—"} />
               <Row k="Max consumer lag" v={stats?.max_consumer_lag_seconds != null ? `${Math.round(stats.max_consumer_lag_seconds)}s` : "—"} />
             </CardContent>
@@ -213,6 +256,71 @@ export function QueueDetail() {
 
       {tab === "dlq" && <DlqTab queueId={queueId} />}
 
+      {tab === "timeline" && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle>Activity timeline</CardTitle>
+            <Select className="w-52" value={tlAction} onChange={(e) => setTlAction(e.target.value)}>
+              <option value="">All actions</option>
+              <option value="queue_created">Created</option>
+              <option value="queue_updated">Updated</option>
+              <option value="queue_paused">Paused</option>
+              <option value="queue_resumed">Resumed</option>
+              <option value="queue_archived">Archived</option>
+              <option value="queue_restored">Restored</option>
+              <option value="queue_purged">Purged</option>
+              <option value="messages_expired">Messages expired</option>
+            </Select>
+          </CardHeader>
+          <CardContent>
+            <ol className="relative space-y-5 border-l border-border pl-5">
+              {(timelineQ.data?.items ?? []).map((log) => (
+                <li key={log.id} className="relative">
+                  <span
+                    className={`absolute -left-[1.42rem] top-1 h-2.5 w-2.5 rounded-full ${
+                      queueActionColors[log.action] ?? "bg-muted-foreground"
+                    }`}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium capitalize">
+                      {log.action.replace(/^queue_/, "").replace(/_/g, " ")}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
+                  </div>
+                  {log.remark && <p className="mt-1 text-sm text-muted-foreground">{log.remark}</p>}
+                  {Object.keys(log.context ?? {}).length > 0 && (
+                    <JsonView data={log.context} className="mt-2 max-h-40" />
+                  )}
+                </li>
+              ))}
+              {timelineQ.data?.items.length === 0 && (
+                <li className="text-sm text-muted-foreground">No activity.</li>
+              )}
+            </ol>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={purgeOpen} onClose={() => setPurgeOpen(false)} title="Purge queue">
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Permanently delete all <span className="font-medium text-foreground">pending</span>{" "}
+            messages in this queue ({stats?.pending ?? 0} pending). In-flight, completed, failed
+            and dead-letter messages are kept. This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPurgeOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => purge.mutate()}
+              disabled={purge.isPending}
+            >
+              {purge.isPending ? "Purging…" : "Purge pending"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
       <PublishDialog open={pubOpen} onClose={() => setPubOpen(false)} queueId={queueId} onDone={() => {
         qc.invalidateQueries({ queryKey: ["messages", queueId] });
         qc.invalidateQueries({ queryKey: ["queue-stats", queueId] });
@@ -222,6 +330,7 @@ export function QueueDetail() {
       }} />
       {queue && (
         <EditQueueDialog
+          key={queue.updated_at ?? queue.created_at}
           open={editOpen}
           onClose={() => setEditOpen(false)}
           queue={queue}
@@ -359,7 +468,8 @@ function EditQueueDialog({
   const [retryDelay, setRetryDelay] = useState(queue.retry_delay_seconds);
   const [visibility, setVisibility] = useState(queue.visibility_timeout_seconds);
   const [retention, setRetention] = useState(queue.retention_seconds);
-  const [processedRetention, setProcessedRetention] = useState(queue.processed_retention_seconds);
+  const [successRetention, setSuccessRetention] = useState(queue.success_retention_seconds);
+  const [failedRetention, setFailedRetention] = useState(queue.failed_retention_seconds);
   const [fifo, setFifo] = useState(queue.fifo_enabled);
   const [dlq, setDlq] = useState(queue.dlq_enabled);
   const [metadataText, setMetadataText] = useState(
@@ -381,7 +491,8 @@ function EditQueueDialog({
         retry_delay_seconds: retryDelay,
         visibility_timeout_seconds: visibility,
         retention_seconds: retention,
-        processed_retention_seconds: processedRetention,
+        success_retention_seconds: successRetention,
+        failed_retention_seconds: failedRetention,
         fifo_enabled: fifo,
         dlq_enabled: dlq,
         ...(metadata !== undefined ? { metadata } : {}),
@@ -401,10 +512,12 @@ function EditQueueDialog({
             <Input type="number" min={0} value={retryDelay} onChange={(e) => setRetryDelay(Number(e.target.value))} /></div>
           <div className="space-y-1.5"><Label>Visibility timeout (s)</Label>
             <Input type="number" min={1} value={visibility} onChange={(e) => setVisibility(Number(e.target.value))} /></div>
-          <div className="space-y-1.5"><Label>Retention (s)</Label>
+          <div className="space-y-1.5"><Label>Pending retention (s)</Label>
             <Input type="number" min={1} value={retention} onChange={(e) => setRetention(Number(e.target.value))} /></div>
-          <div className="space-y-1.5"><Label>Processed-log retention (s)</Label>
-            <Input type="number" min={1} value={processedRetention} onChange={(e) => setProcessedRetention(Number(e.target.value))} /></div>
+          <div className="space-y-1.5"><Label>Success retention (s)</Label>
+            <Input type="number" min={1} value={successRetention} onChange={(e) => setSuccessRetention(Number(e.target.value))} /></div>
+          <div className="space-y-1.5"><Label>Failed retention (s)</Label>
+            <Input type="number" min={1} value={failedRetention} onChange={(e) => setFailedRetention(Number(e.target.value))} /></div>
         </div>
         <div className="flex gap-6">
           <label className="flex items-center gap-2 text-sm">
@@ -554,6 +667,7 @@ function ConsumerDialog({
   const [autoComplete, setAutoComplete] = useState(true);
   const [rules, setRules] = useState<RoutingRule[]>([]);
   const [matchMode, setMatchMode] = useState<"any" | "all">("any");
+  const [headers, setHeaders] = useState<{ key: string; value: string }[]>([]);
   const isPush = type === "webhook";
 
   const reset = () => {
@@ -562,6 +676,7 @@ function ConsumerDialog({
     setAutoComplete(true);
     setRules([]);
     setMatchMode("any");
+    setHeaders([]);
     setType("http");
   };
 
@@ -574,6 +689,7 @@ function ConsumerDialog({
           endpoint_url: isPush ? endpoint : null,
           auto_complete: isPush ? autoComplete : true,
           match_mode: matchMode,
+          custom_headers: isPush ? buildCustomHeaders(headers) : {},
           routing_rules: isPush
             ? rules
                 .filter((r) => r.field)
@@ -600,6 +716,11 @@ function ConsumerDialog({
   const updateRule = (i: number, patch: Partial<RoutingRule>) =>
     setRules((r) => r.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
   const removeRule = (i: number) => setRules((r) => r.filter((_, idx) => idx !== i));
+
+  const addHeader = () => setHeaders((h) => [...h, { key: "", value: "" }]);
+  const updateHeader = (i: number, patch: Partial<{ key: string; value: string }>) =>
+    setHeaders((h) => h.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+  const removeHeader = (i: number) => setHeaders((h) => h.filter((_, idx) => idx !== i));
 
   return (
     <Dialog open={open} onClose={onClose} title="New consumer" className="max-w-2xl">
@@ -654,6 +775,39 @@ function ConsumerDialog({
                 </span>
               </span>
             </label>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Custom headers (optional)</Label>
+                <Button type="button" variant="ghost" size="sm" onClick={addHeader}>
+                  <Plus size={14} /> Add header
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sent on every POST so your receiver can validate the call (e.g.
+                Authorization). Reserved X-FlowQueue-* and the signature header can’t be
+                overridden.
+              </p>
+              {headers.map((h, i) => (
+                <div key={i} className="grid grid-cols-12 items-center gap-2">
+                  <Input
+                    className="col-span-5"
+                    placeholder="X-Api-Key"
+                    value={h.key}
+                    onChange={(e) => updateHeader(i, { key: e.target.value })}
+                  />
+                  <Input
+                    className="col-span-6"
+                    placeholder="value"
+                    value={h.value}
+                    onChange={(e) => updateHeader(i, { value: e.target.value })}
+                  />
+                  <Button type="button" variant="ghost" size="icon" className="col-span-1" onClick={() => removeHeader(i)}>
+                    <Trash2 size={14} className="text-red-400" />
+                  </Button>
+                </div>
+              ))}
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">

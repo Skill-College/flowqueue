@@ -12,7 +12,8 @@ class QueueCreate(BaseModel):
     max_retries: int = Field(default=3, ge=0)
     retry_delay_seconds: int = Field(default=60, ge=0)
     retention_seconds: int = Field(default=604800, ge=1)
-    processed_retention_seconds: int = Field(default=2592000, ge=1)
+    success_retention_seconds: int = Field(default=86400, ge=1)
+    failed_retention_seconds: int = Field(default=604800, ge=1)
     visibility_timeout_seconds: int = Field(default=30, ge=1)
     dlq_enabled: bool = True
     metadata: dict = Field(default_factory=dict)
@@ -23,7 +24,8 @@ class QueueUpdate(BaseModel):
     max_retries: int | None = Field(default=None, ge=0)
     retry_delay_seconds: int | None = Field(default=None, ge=0)
     retention_seconds: int | None = Field(default=None, ge=1)
-    processed_retention_seconds: int | None = Field(default=None, ge=1)
+    success_retention_seconds: int | None = Field(default=None, ge=1)
+    failed_retention_seconds: int | None = Field(default=None, ge=1)
     visibility_timeout_seconds: int | None = Field(default=None, ge=1)
     dlq_enabled: bool | None = None
     is_paused: bool | None = None
@@ -41,7 +43,8 @@ class QueueOut(BaseModel):
     max_retries: int
     retry_delay_seconds: int
     retention_seconds: int
-    processed_retention_seconds: int
+    success_retention_seconds: int
+    failed_retention_seconds: int
     visibility_timeout_seconds: int
     dlq_enabled: bool
     is_paused: bool
@@ -49,6 +52,19 @@ class QueueOut(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime | None
+
+
+class QueueLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    queue_id: uuid.UUID | None
+    action: str
+    actor_id: uuid.UUID | None
+    remark: str | None
+    metadata: dict = Field(validation_alias="meta", serialization_alias="metadata")
+    context: dict
+    created_at: datetime
 
 
 class QueueStats(BaseModel):

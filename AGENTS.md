@@ -14,7 +14,8 @@ everything is Postgres-backed.
   httpx, PyJWT, bcrypt, structlog. Python 3.11+.
 - Frontend: React 18 + Vite + TypeScript + Tailwind + TanStack Query + React Router
   + recharts + sonner (`web/`).
-- SDK: standalone sync httpx client, published to PyPI as `flowqueue` (`sdk/`).
+- SDK: standalone **async, typed** httpx client (publish + consume only — no
+  management/api-keys/replay/DLQ), published to PyPI as `flowqueue` (`sdk/`).
 - Infra: Docker Compose — `db` (Postgres 18), `app` (uvicorn API), `worker`
   (APScheduler jobs), `web` (nginx serves SPA + proxies `/api` → app). Optional `nginx`.
 
@@ -40,18 +41,19 @@ app/
     routing_engine.py  matches(rules, payload, mode) filter evaluator (no eval)
     exceptions.py    FlowQueueError + handlers (404/409/422/403/401)
   models/            SQLAlchemy: queue, consumer, message, delivery, delivery_log,
-                     replay_request, api_key, user, queue_sequence
+                     queue_log, replay_request, api_key, user, queue_sequence
   schemas/           Pydantic request/response
-  services/          audit_service (audit chokepoint), queue/consumer/message/
+  services/          audit_service (delivery audit chokepoint), queue_audit_service
+                     (queue timeline chokepoint), queue/consumer/message/
                      delivery/webhook/replay/auth services
   api/v1/            routers: auth, admin, queues, consumers, messages, deliveries,
                      replay, stats(search), api_keys, events(SSE+timeseries)
   workers/           runner (APScheduler) + visibility_reclaim, webhook_dispatcher,
                      retention_janitor, replay_worker
   cli.py             create-user, promote-admin, create-api-key, claim-orphans, init-db
-alembic/versions/    migrations 0001..0005
+alembic/versions/    migrations 0001..0008
 web/                 React SPA (src/pages, src/components/ui, src/lib)
-sdk/                 publishable `flowqueue` client (+ PUBLISHING.md)
+sdk/                 publishable async `flowqueue` client (client/consumer/types/errors)
 ```
 
 ## Non-negotiable invariants (do not break)
@@ -59,7 +61,10 @@ sdk/                 publishable `flowqueue` client (+ PUBLISHING.md)
    `app/services/audit_service.py` and writes a `delivery_logs` row in the SAME
    session/txn as the mutation. Never mutate delivery status without a log.
 2. **delivery_logs are append-only.** Never UPDATE/DELETE them. Retention nulls the FK
-   (`ON DELETE SET NULL`) so logs survive message/delivery purge.
+   (`ON DELETE SET NULL`) so logs survive message/delivery purge. **queue_logs** follow
+   the same rule: every queue lifecycle action (create/update/pause/resume/archive/
+   restore/purge) writes one row via `app/services/queue_audit_service.py` in the SAME
+   txn as the change; append-only, FK `ON DELETE SET NULL`.
 3. **Tenant isolation.** Every queue-scoped route resolves ownership via
    `app/core/authz.py` (returns 404, not 403, for non-owners). Admins bypass. List
    endpoints filter by `owner_id`. Workers are system-level (no ownership filter) but
@@ -82,6 +87,18 @@ sdk/                 publishable `flowqueue` client (+ PUBLISHING.md)
 - Delivery states: pending → processing → completed | failed | **dead** (DLQ).
 - Concurrency: pollers/workers use `FOR UPDATE SKIP LOCKED`. Pull (`poll_next`) only
   serves `http`/`sdk` consumers; webhook deliveries are owned by `webhook_dispatcher`.
+- Webhook `custom_headers`: merged in `webhook_service._post` as
+  `{Content-Type, **custom_headers, **reserved X-FlowQueue-*, signature}` — reserved and
+  signature headers always win (callers can't override/forge them).
+- Purge (`POST /queues/{id}/purge`, `queue_service.purge_queue`): hard-deletes only
+  `pending` deliveries + messages left with zero deliveries; never touches
+  processing/completed/failed/dead; does NOT reset `queue_sequences`.
+- Retention is outcome-based (`retention_janitor`): `success_retention_seconds` (all
+  deliveries completed) vs `failed_retention_seconds` (any failed/dead) vs
+  `retention_seconds` (pending/`expires_at`). Mixed outcome → failed bucket. Each sweep
+  writes a `messages_expired` queue_log row (counts in `context`); `/metrics` sums them
+  into `flowqueue_messages_purged_total{outcome}`. `processed_retention_seconds` is gone
+  (renamed → `success_retention_seconds` in migration 0008).
 - Realtime SSE (`/api/v1/events/stream`) takes the access token as a **query param**
   (EventSource can't set headers); it polls delivery_logs for owned queues.
 

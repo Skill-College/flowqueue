@@ -33,7 +33,7 @@ SQLAlchemy) + Docker. No Redis.
 | `visibility_reclaim` | 10s | reclaim stuck `processing` deliveries (retry/fail) |
 | `webhook_dispatcher` | 5s | push pending deliveries to webhook/workflow consumers |
 | `replay_worker` | 2s | process replay jobs (≤100 msg/s) |
-| `retention_janitor` | 1h | purge expired, fully-terminal messages |
+| `retention_janitor` | 1h | permanently delete expired messages (outcome-based windows) |
 
 ### Delivery lifecycle
 
@@ -137,6 +137,16 @@ Interactive docs: `http://localhost:8000/docs` (unauthenticated). Health:
   `POST /deliveries/{id}/complete` (or `/fail`) using the `X-FlowQueue-Delivery-ID`
   header. No callback before the visibility timeout → redelivered, then `failed` at
   max retries. The consumer detail page shows copy-paste demo code per type.
+  When `auto_complete=off` and the POST returns 2xx, the delivery's audit timeline
+  records a remark naming the webhook consumer that is awaiting the callback.
+
+### Webhook custom headers
+Webhook consumers accept a `custom_headers` map (`{"X-Api-Key": "...", ...}`) sent on
+**every** POST (and the test delivery), so your receiver can validate the call.
+Precedence: caller headers first, then FlowQueue's reserved `X-FlowQueue-*` identity
+headers, then `X-FlowQueue-Signature` — so the reserved/signature headers can never be
+overridden or forged. Set them via the consumer create/edit dialogs or
+`POST/PATCH /queues/{qid}/consumers/{cid}` with `"custom_headers": {...}`.
 
 ## Delivery filter rules (webhook consumers)
 
@@ -168,6 +178,49 @@ The `endpoint_url` is SSRF-checked (private/loopback/link-local IPs blocked).
   queues reject publish. The UI Queues page has **Active** / **Archived** tabs.
 - **Restore**: `PATCH /queues/{id}` `{"is_active": true}` (Restore button in the UI).
 
+## Queue timeline
+
+Every queue-level action writes an append-only row to `queue_logs`: `queue_created`,
+`queue_updated`, `queue_paused`, `queue_resumed`, `queue_archived`, `queue_restored`,
+`queue_purged`. Each row carries the action, the actor, an optional remark, and a
+JSON `context`. Read it with `GET /queues/{id}/timeline` (paginated; filter with
+`?action=queue_purged`). The Queue detail page has a **Timeline** tab with an action
+filter. Like `delivery_logs`, the table is append-only and written in the same
+transaction as the change (`app/services/queue_audit_service.py`).
+
+## Purge
+
+`POST /queues/{id}/purge` **permanently** deletes all *pending* (un-started) messages:
+deliveries still in `pending` status and any message left with no deliveries.
+In-flight (`processing`), `completed`, `failed`, and dead-letter messages are kept;
+the per-queue sequence counter is not reset. `delivery_logs` survive (their FK is
+`ON DELETE SET NULL`). A `queue_purged` timeline row records the counts. The Queue
+detail page exposes a **Purge** button behind a confirm dialog. This cannot be undone.
+
+## Message retention (outcome-based)
+
+`retention_janitor` (hourly) **permanently** deletes expired messages. Three per-queue
+windows (all editable in the queue create/edit dialogs):
+
+| Window | Applies to | Default |
+|--------|------------|---------|
+| `retention_seconds` | pending / never-consumed messages (`expires_at` = `published_at` + this) | 604800 (7d) |
+| `success_retention_seconds` | messages whose deliveries **all completed** | 86400 (24h) |
+| `failed_retention_seconds` | messages with **any** failed/dead delivery (rest terminal) | 604800 (7d) |
+
+A terminal message's age is measured from its newest delivery terminal time
+(`completed_at`/`updated_at`). Mixed outcome (some completed, some failed) → **failed
+bucket** (kept longer). Deleting a message cascades its deliveries; `delivery_logs`
+survive (`ON DELETE SET NULL`).
+
+**Metrics**: each sweep writes a `messages_expired` row to the queue timeline
+(`context: {success, failed, total}`), visible/filterable in the **Timeline** tab.
+`/metrics` exposes cumulative counters summed from those rows:
+```
+flowqueue_messages_purged_total{outcome="success"} <n>
+flowqueue_messages_purged_total{outcome="failed"} <n>
+```
+
 ## UI theme
 
 Light/dark toggle in the sidebar (persisted to `localStorage`), bold Duolingo-style
@@ -192,20 +245,23 @@ curl $BASE/api/v1/replay/<replay_request_id> -H "Authorization: Bearer $TOKEN"
 
 ## Python SDK
 
+Async, typed **runtime** client (`pip install flowqueue`) — publish + consume only.
+Queues, consumers, API keys, replay, and DLQ are managed in the UI / HTTP API, not the
+SDK. See `sdk/README.md`.
+
 ```python
-from app.sdk import FlowQueueClient, FlowQueueConsumer
+import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("http://localhost:8000", "fq_...")
-client.publish(queue_id, {"order_id": 42}, idempotency_key="order-42")
+async def main():
+    async with AsyncFlowQueueClient("http://localhost:8000", "fq_...") as client:
+        await client.publish(queue_id, {"order_id": 42}, idempotency_key="order-42")
 
-consumer = FlowQueueConsumer(client, consumer_id)
-d = consumer.poll()
-if d:
-    try:
-        handle(d.payload)
-        consumer.complete(d.id, remark="ok")
-    except Exception as e:
-        consumer.fail(d.id, remark=str(e))
+        consumer = AsyncFlowQueueConsumer(client, consumer_id)
+        # handler may be sync or async; return => complete, raise => fail (retry/DLQ)
+        await consumer.run(lambda d: handle(d["payload"]))
+
+asyncio.run(main())
 ```
 
 ## Configuration (env vars)

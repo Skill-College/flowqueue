@@ -27,11 +27,17 @@ class Queue(Base):
     fifo_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     max_retries: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     retry_delay_seconds: Mapped[int] = mapped_column(Integer, default=60, nullable=False)
+    # Pending/un-consumed retention: Message.expires_at = published_at + this.
     retention_seconds: Mapped[int] = mapped_column(
         Integer, default=604800, nullable=False
     )
-    processed_retention_seconds: Mapped[int] = mapped_column(
-        Integer, default=2592000, nullable=False
+    # Outcome-based retention for terminal messages, applied by retention_janitor:
+    # all deliveries completed -> success window; any failed/dead -> failed window.
+    success_retention_seconds: Mapped[int] = mapped_column(
+        Integer, default=86400, nullable=False
+    )
+    failed_retention_seconds: Mapped[int] = mapped_column(
+        Integer, default=604800, nullable=False
     )
     visibility_timeout_seconds: Mapped[int] = mapped_column(
         Integer, default=30, nullable=False

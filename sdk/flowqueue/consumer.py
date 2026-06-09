@@ -1,75 +1,86 @@
-"""High-level pull consumer with an optional run() loop."""
+"""High-level async pull consumer with an optional run() loop."""
 
 from __future__ import annotations
 
-import time
-from typing import Callable, Optional
+import asyncio
+import inspect
+from typing import Awaitable, Callable, Optional, Union
 
-from .client import FlowQueueClient
-from .models import Delivery
+from .client import AsyncFlowQueueClient
+from .types import DeliveryOut
+
+Handler = Callable[[DeliveryOut], Union[None, Awaitable[None]]]
 
 
-class FlowQueueConsumer:
-    """Pull consumer bound to a single consumer id.
+class AsyncFlowQueueConsumer:
+    """Async pull consumer bound to a single consumer id.
 
     Example:
-        from flowqueue import FlowQueueClient, FlowQueueConsumer
-        client = FlowQueueClient(url, key)
-        consumer = FlowQueueConsumer(client, consumer_id)
+        import asyncio
+        from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-        # one-shot
-        d = consumer.poll()
-        if d:
-            consumer.complete(d.id, remark="ok")
+        async def main():
+            async with AsyncFlowQueueClient(url, key) as client:
+                consumer = AsyncFlowQueueConsumer(client, "<consumer_id>")
 
-        # or run forever (handler return => complete, raise => fail)
-        consumer.run(lambda d: process(d.payload))
+                # one-shot
+                d = await consumer.poll()
+                if d:
+                    await consumer.complete(d["id"], remark="ok")
+
+                # or run forever (handler return => complete, raise => fail)
+                await consumer.run(lambda d: process(d["payload"]))
+
+        asyncio.run(main())
     """
 
-    def __init__(self, client: FlowQueueClient, consumer_id: str) -> None:
+    def __init__(self, client: AsyncFlowQueueClient, consumer_id: str) -> None:
         self.client = client
         self.consumer_id = consumer_id
 
-    def poll(self) -> Optional[Delivery]:
-        data = self.client.poll(self.consumer_id)
-        return Delivery.from_dict(data) if data else None
+    async def poll(self) -> Optional[DeliveryOut]:
+        return await self.client.poll(self.consumer_id)
 
-    def ack(self, delivery_id: str) -> dict:
-        return self.client.ack(delivery_id)
+    async def ack(self, delivery_id: str) -> DeliveryOut:
+        return await self.client.ack(delivery_id)
 
-    def complete(self, delivery_id: str, remark: str | None = None) -> dict:
-        return self.client.complete(delivery_id, remark=remark)
+    async def complete(self, delivery_id: str, remark: Optional[str] = None) -> DeliveryOut:
+        return await self.client.complete(delivery_id, remark=remark)
 
-    def fail(self, delivery_id: str, remark: str, metadata: dict | None = None) -> dict:
-        return self.client.fail(delivery_id, remark, metadata)
+    async def fail(
+        self, delivery_id: str, remark: str, metadata: Optional[dict] = None
+    ) -> DeliveryOut:
+        return await self.client.fail(delivery_id, remark, metadata)
 
-    def add_remark(self, delivery_id: str, remark: str) -> dict:
-        return self.client.add_remark(delivery_id, remark)
+    async def add_remark(self, delivery_id: str, remark: str) -> DeliveryOut:
+        return await self.client.add_remark(delivery_id, remark)
 
-    def run(
+    async def run(
         self,
-        handler: Callable[[Delivery], None],
+        handler: Handler,
         *,
         poll_interval: float = 2.0,
         auto_complete: bool = True,
-        max_iterations: int | None = None,
+        max_iterations: Optional[int] = None,
     ) -> None:
-        """Continuously poll and dispatch deliveries to `handler`.
+        """Continuously poll and dispatch deliveries to `handler` (sync or async).
 
         On success the delivery is completed (when auto_complete); on exception it is
-        failed (triggering retry/DLQ per queue config). Sleeps poll_interval when idle.
-        Set max_iterations to bound the loop (useful for tests/cron-style runs).
+        failed (triggering retry/DLQ per queue config). Awaits poll_interval when idle.
+        Set max_iterations to bound the loop (useful for tests / cron-style runs).
         """
         iterations = 0
         while max_iterations is None or iterations < max_iterations:
             iterations += 1
-            delivery = self.poll()
+            delivery = await self.poll()
             if delivery is None:
-                time.sleep(poll_interval)
+                await asyncio.sleep(poll_interval)
                 continue
             try:
-                handler(delivery)
+                result = handler(delivery)
+                if inspect.isawaitable(result):
+                    await result
                 if auto_complete:
-                    self.complete(delivery.id, remark="ok")
+                    await self.complete(delivery["id"], remark="ok")
             except Exception as exc:  # noqa: BLE001
-                self.fail(delivery.id, remark=str(exc)[:500])
+                await self.fail(delivery["id"], remark=str(exc)[:500])

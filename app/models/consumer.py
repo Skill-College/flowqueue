@@ -46,6 +46,10 @@ class Consumer(Base):
     match_mode: Mapped[str] = mapped_column(String(8), default="any", nullable=False)
     # Optional HMAC secret; if set, outbound webhooks include X-FlowQueue-Signature.
     signing_secret: Mapped[str | None] = mapped_column(String(128))
+    # Webhook (push) only: extra request headers sent on every POST so the receiver
+    # can validate the call (e.g. Authorization, X-Api-Key). Reserved X-FlowQueue-*
+    # and the signature header always win over these (see webhook_service._post).
+    custom_headers: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     # Push (webhook) only: True => mark delivery completed on HTTP 2xx (default).
     # False => 2xx leaves it 'processing'; receiver must call complete/fail back,
     # else the visibility timeout reclaims and redelivers it.

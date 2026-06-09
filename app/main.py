@@ -52,10 +52,14 @@ async def metrics():
     from fastapi.responses import PlainTextResponse
     from sqlalchemy import func, select
 
+    from sqlalchemy import Integer, cast
+
     from app.database import async_session_factory
     from app.models.delivery import Delivery, DeliveryStatus
     from app.models.message import Message
     from app.models.queue import Queue
+    from app.models.queue_log import QueueLog
+    from app.services import queue_audit_service
 
     async with async_session_factory() as session:
         status_rows = (
@@ -66,6 +70,22 @@ async def metrics():
             counts[status.value] = n
         queues_n = (await session.execute(select(func.count()).select_from(Queue))).scalar_one()
         messages_n = (await session.execute(select(func.count()).select_from(Message))).scalar_one()
+
+        # Cumulative permanently-deleted messages by outcome, summed from the
+        # append-only queue_logs `messages_expired` rows (survives restarts).
+        purged = (
+            await session.execute(
+                select(
+                    func.coalesce(
+                        func.sum(cast(QueueLog.context["success"].astext, Integer)), 0
+                    ),
+                    func.coalesce(
+                        func.sum(cast(QueueLog.context["failed"].astext, Integer)), 0
+                    ),
+                ).where(QueueLog.action == queue_audit_service.MESSAGES_EXPIRED)
+            )
+        ).one()
+        purged_success, purged_failed = purged
 
     lines = [
         "# HELP flowqueue_deliveries Total deliveries by status",
@@ -79,4 +99,8 @@ async def metrics():
     lines.append("# HELP flowqueue_messages_total Total messages")
     lines.append("# TYPE flowqueue_messages_total gauge")
     lines.append(f"flowqueue_messages_total {messages_n}")
+    lines.append("# HELP flowqueue_messages_purged_total Messages permanently deleted by retention")
+    lines.append("# TYPE flowqueue_messages_purged_total counter")
+    lines.append(f'flowqueue_messages_purged_total{{outcome="success"}} {purged_success}')
+    lines.append(f'flowqueue_messages_purged_total{{outcome="failed"}} {purged_failed}')
     return PlainTextResponse("\n".join(lines) + "\n")

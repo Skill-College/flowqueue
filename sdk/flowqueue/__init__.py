@@ -1,16 +1,21 @@
-"""FlowQueue Python SDK — sync client for the FlowQueue message platform."""
+"""FlowQueue Python SDK — async, typed runtime client (publish + consume).
 
-from .client import FlowQueueClient
-from .consumer import FlowQueueConsumer
+Queue/consumer management, API keys, replay, and DLQ live in the FlowQueue UI.
+"""
+
+from .client import AsyncFlowQueueClient
+from .consumer import AsyncFlowQueueConsumer
 from .errors import ApiError, FlowQueueError
-from .models import Delivery
+from .types import DeliveryOut, DeliveryStatus, MessageOut
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
-    "FlowQueueClient",
-    "FlowQueueConsumer",
-    "Delivery",
+    "AsyncFlowQueueClient",
+    "AsyncFlowQueueConsumer",
+    "MessageOut",
+    "DeliveryOut",
+    "DeliveryStatus",
     "FlowQueueError",
     "ApiError",
     "__version__",

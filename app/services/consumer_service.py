@@ -41,6 +41,7 @@ async def create_consumer(
         match_mode=data.match_mode,
         auto_complete=data.auto_complete,
         signing_secret=data.signing_secret,
+        custom_headers=data.custom_headers,
         meta=data.metadata,
     )
     session.add(consumer)

@@ -16,7 +16,8 @@ export interface Queue {
   max_retries: number;
   retry_delay_seconds: number;
   retention_seconds: number;
-  processed_retention_seconds: number;
+  success_retention_seconds: number;
+  failed_retention_seconds: number;
   visibility_timeout_seconds: number;
   dlq_enabled: boolean;
   is_paused: boolean;
@@ -57,6 +58,7 @@ export interface Consumer {
   match_mode: MatchMode;
   auto_complete: boolean;
   signing_secret: string | null;
+  custom_headers: Record<string, string>;
   is_active: boolean;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -95,6 +97,17 @@ export interface DeliveryLog {
   event_type: string;
   from_status: string | null;
   to_status: string | null;
+  remark: string | null;
+  metadata: Record<string, unknown>;
+  context: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface QueueLog {
+  id: string;
+  queue_id: string | null;
+  action: string;
+  actor_id: string | null;
   remark: string | null;
   metadata: Record<string, unknown>;
   context: Record<string, unknown>;

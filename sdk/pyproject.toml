@@ -1,10 +1,10 @@
 [project]
 name = "flowqueue"
-version = "0.1.0"
-description = "Python client SDK for FlowQueue — a cloud-native message processing platform"
+version = "0.2.0"
+description = "Async, typed Python runtime client for FlowQueue (publish + consume)"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 authors = [{ name = "Skill.College" }]
 keywords = ["queue", "messaging", "webhook", "delivery", "dlq", "flowqueue"]
 dependencies = ["httpx>=0.27"]
@@ -24,7 +24,7 @@ Repository = "https://github.com/Skill-College/flowqueue"
 Documentation = "https://github.com/Skill-College/flowqueue#readme"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -32,3 +32,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["flowqueue*"]
+
+[tool.setuptools.package-data]
+flowqueue = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

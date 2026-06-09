@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Pagination } from "@/components/ui/pagination";
-import { formatDate, shortId, copy } from "@/lib/utils";
+import { formatDate, shortId, copy, buildCustomHeaders } from "@/lib/utils";
 
 const STATUSES: (DeliveryStatus | "")[] = ["", "pending", "processing", "completed", "failed"];
 
@@ -78,20 +78,24 @@ curl -s -X POST $BASE/api/v1/deliveries/<delivery_id>/fail \\
   }
 
   if (consumer.type === "sdk") {
-    const code = `pip install flowqueue
+    const code = `pip install flowqueue   # async, typed
 
-from flowqueue import FlowQueueClient, FlowQueueConsumer
+import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("${base}", "fq_xxx")   # your API key
-consumer = FlowQueueConsumer(client, "${cid}")
+async def main():
+    async with AsyncFlowQueueClient("${base}", "fq_xxx") as client:   # your API key
+        consumer = AsyncFlowQueueConsumer(client, "${cid}")
 
-d = consumer.poll()                 # claim next delivery (or None)
-if d:
-    try:
-        handle(d.payload)           # your work here
-        consumer.complete(d.id, remark="ok")
-    except Exception as e:
-        consumer.fail(d.id, remark=str(e))`;
+        d = await consumer.poll()           # claim next delivery (or None)
+        if d:
+            try:
+                handle(d["payload"])        # your work here
+                await consumer.complete(d["id"], remark="ok")
+            except Exception as e:
+                await consumer.fail(d["id"], remark=str(e))
+
+asyncio.run(main())`;
     return <CodeBlock code={code} />;
   }
 
@@ -294,6 +298,22 @@ export function ConsumerDetail() {
                       <Badge className="border-amber-500/30 text-amber-400">off (await callback)</Badge>
                     )}
                   </div>
+                  {(() => {
+                    const headerKeys = Object.keys(consumer.custom_headers ?? {});
+                    if (headerKeys.length === 0) return null;
+                    return (
+                      <div className="pt-1">
+                        <div className="mb-1 text-muted-foreground">Custom headers</div>
+                        <ul className="space-y-1">
+                          {headerKeys.map((k) => (
+                            <li key={k} className="rounded border border-border px-2 py-1 font-mono text-xs">
+                              {k}: ••••••
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                   {consumer.routing_rules.length > 0 && (
                     <div className="pt-1">
                       <div className="mb-1 flex items-center justify-between text-muted-foreground">
@@ -411,6 +431,9 @@ function EditConsumerDialog({
   const [matchMode, setMatchMode] = useState<"any" | "all">(consumer.match_mode);
   const [secret, setSecret] = useState(consumer.signing_secret ?? "");
   const [rules, setRules] = useState<RoutingRule[]>(consumer.routing_rules ?? []);
+  const [headers, setHeaders] = useState<{ key: string; value: string }[]>(
+    Object.entries(consumer.custom_headers ?? {}).map(([key, value]) => ({ key, value }))
+  );
   const isWebhook = consumer.type === "webhook";
 
   const addRule = () =>
@@ -418,6 +441,11 @@ function EditConsumerDialog({
   const updateRule = (i: number, patch: Partial<RoutingRule>) =>
     setRules((r) => r.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
   const removeRule = (i: number) => setRules((r) => r.filter((_, idx) => idx !== i));
+
+  const addHeader = () => setHeaders((h) => [...h, { key: "", value: "" }]);
+  const updateHeader = (i: number, patch: Partial<{ key: string; value: string }>) =>
+    setHeaders((h) => h.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+  const removeHeader = (i: number) => setHeaders((h) => h.filter((_, idx) => idx !== i));
 
   const save = useMutation({
     mutationFn: async () => {
@@ -427,6 +455,7 @@ function EditConsumerDialog({
         body.auto_complete = autoComplete;
         body.match_mode = matchMode;
         body.signing_secret = secret || null;
+        body.custom_headers = buildCustomHeaders(headers);
         body.routing_rules = rules
           .filter((r) => r.field)
           .map((r) => {
@@ -461,6 +490,27 @@ function EditConsumerDialog({
               <input type="checkbox" checked={autoComplete} onChange={(e) => setAutoComplete(e.target.checked)} />
               Auto-complete on 2xx
             </label>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Custom headers</Label>
+                <Button type="button" variant="ghost" size="sm" onClick={addHeader}><Plus size={14} /> Add</Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sent on every POST for receiver-side validation. Reserved X-FlowQueue-*
+                headers can’t be overridden.
+              </p>
+              {headers.map((h, i) => (
+                <div key={i} className="grid grid-cols-12 items-center gap-2">
+                  <Input className="col-span-5" placeholder="X-Api-Key" value={h.key}
+                    onChange={(e) => updateHeader(i, { key: e.target.value })} />
+                  <Input className="col-span-6" placeholder="value" value={h.value}
+                    onChange={(e) => updateHeader(i, { value: e.target.value })} />
+                  <Button type="button" variant="ghost" size="icon" className="col-span-1" onClick={() => removeHeader(i)}>
+                    <Trash2 size={14} className="text-red-400" />
+                  </Button>
+                </div>
+              ))}
+            </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Filter rules</Label>
