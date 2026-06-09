@@ -71,8 +71,17 @@ export function Queues() {
       toast.success("Queue created");
       invalidate();
       setOpen(false);
+      // Full reset so the next "New queue" starts from defaults.
       setName("");
       setMetadataText("");
+      setFifo(false);
+      setMaxRetries(3);
+      setRetryDelay(60);
+      setVisibility(30);
+      setRetention(604800);
+      setSuccessRetention(86400);
+      setFailedRetention(604800);
+      setDlqEnabled(true);
     },
     onError: (e) => toast.error(apiErrorMessage(e)),
   });

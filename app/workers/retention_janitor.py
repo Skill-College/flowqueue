@@ -23,7 +23,7 @@ from app.models.queue import Queue
 from app.services import queue_audit_service
 
 
-def _retention_for(any_failed: bool, queue: Queue) -> int:
+def _retention_for(*, any_failed: bool, queue: Queue) -> int:
     """Pick the retention window (seconds) for a terminal message's outcome."""
     return queue.failed_retention_seconds if any_failed else queue.success_retention_seconds
 

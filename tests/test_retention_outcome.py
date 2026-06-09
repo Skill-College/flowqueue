@@ -12,14 +12,14 @@ def _queue(success=86400, failed=604800):
 
 
 def test_success_outcome_uses_success_window():
-    assert _retention_for(False, _queue()) == 86400
+    assert _retention_for(any_failed=False, queue=_queue()) == 86400
 
 
 def test_failed_outcome_uses_failed_window():
-    assert _retention_for(True, _queue()) == 604800
+    assert _retention_for(any_failed=True, queue=_queue()) == 604800
 
 
 def test_custom_windows_are_respected():
     q = _queue(success=10, failed=99)
-    assert _retention_for(False, q) == 10
-    assert _retention_for(True, q) == 99
+    assert _retention_for(any_failed=False, queue=q) == 10
+    assert _retention_for(any_failed=True, queue=q) == 99

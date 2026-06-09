@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { Pagination } from "@/components/ui/pagination";
-import { formatDate, shortId, copy } from "@/lib/utils";
+import { formatDate, shortId, copy, buildCustomHeaders } from "@/lib/utils";
 
 const STATUSES: (DeliveryStatus | "")[] = ["", "pending", "processing", "completed", "failed"];
 
@@ -298,18 +298,22 @@ export function ConsumerDetail() {
                       <Badge className="border-amber-500/30 text-amber-400">off (await callback)</Badge>
                     )}
                   </div>
-                  {Object.keys(consumer.custom_headers ?? {}).length > 0 && (
-                    <div className="pt-1">
-                      <div className="mb-1 text-muted-foreground">Custom headers</div>
-                      <ul className="space-y-1">
-                        {Object.keys(consumer.custom_headers).map((k) => (
-                          <li key={k} className="rounded border border-border px-2 py-1 font-mono text-xs">
-                            {k}: ••••••
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+                  {(() => {
+                    const headerKeys = Object.keys(consumer.custom_headers ?? {});
+                    if (headerKeys.length === 0) return null;
+                    return (
+                      <div className="pt-1">
+                        <div className="mb-1 text-muted-foreground">Custom headers</div>
+                        <ul className="space-y-1">
+                          {headerKeys.map((k) => (
+                            <li key={k} className="rounded border border-border px-2 py-1 font-mono text-xs">
+                              {k}: ••••••
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
                   {consumer.routing_rules.length > 0 && (
                     <div className="pt-1">
                       <div className="mb-1 flex items-center justify-between text-muted-foreground">
@@ -451,9 +455,7 @@ function EditConsumerDialog({
         body.auto_complete = autoComplete;
         body.match_mode = matchMode;
         body.signing_secret = secret || null;
-        body.custom_headers = Object.fromEntries(
-          headers.filter((h) => h.key.trim()).map((h) => [h.key.trim(), h.value])
-        );
+        body.custom_headers = buildCustomHeaders(headers);
         body.routing_rules = rules
           .filter((r) => r.field)
           .map((r) => {

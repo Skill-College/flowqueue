@@ -38,3 +38,29 @@ export function shortId(id?: string | null): string {
 export async function copy(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
+
+const RESERVED_HEADER_PREFIX = /^X-FlowQueue-/i;
+const INVALID_HEADER_CHARS = /[\r\n:]/;
+
+/**
+ * Build the custom_headers map from key/value rows: drops blank keys, trims
+ * key+value, and rejects reserved (X-FlowQueue-*) or malformed headers.
+ * Throws Error with a friendly message on the first invalid entry.
+ */
+export function buildCustomHeaders(
+  rows: { key: string; value: string }[]
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const row of rows) {
+    const key = row.key.trim();
+    if (!key) continue;
+    if (RESERVED_HEADER_PREFIX.test(key)) {
+      throw new Error(`Reserved header can't be set: ${key}`);
+    }
+    if (INVALID_HEADER_CHARS.test(key) || INVALID_HEADER_CHARS.test(row.value)) {
+      throw new Error(`Invalid characters in header: ${key}`);
+    }
+    out[key] = row.value.trim();
+  }
+  return out;
+}

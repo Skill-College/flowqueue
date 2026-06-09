@@ -18,7 +18,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { JsonView } from "@/components/JsonView";
-import { formatDate } from "@/lib/utils";
+import { formatDate, buildCustomHeaders } from "@/lib/utils";
 
 const queueActionColors: Record<string, string> = {
   queue_created: "bg-primary",
@@ -330,6 +330,7 @@ export function QueueDetail() {
       }} />
       {queue && (
         <EditQueueDialog
+          key={queue.updated_at ?? queue.created_at}
           open={editOpen}
           onClose={() => setEditOpen(false)}
           queue={queue}
@@ -688,11 +689,7 @@ function ConsumerDialog({
           endpoint_url: isPush ? endpoint : null,
           auto_complete: isPush ? autoComplete : true,
           match_mode: matchMode,
-          custom_headers: isPush
-            ? Object.fromEntries(
-                headers.filter((h) => h.key.trim()).map((h) => [h.key.trim(), h.value])
-              )
-            : {},
+          custom_headers: isPush ? buildCustomHeaders(headers) : {},
           routing_rules: isPush
             ? rules
                 .filter((r) => r.field)
