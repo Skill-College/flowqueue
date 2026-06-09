@@ -68,21 +68,20 @@ const stats = [
 
 const quickstart = `pip install flowqueue`;
 
-const codeSample = `from flowqueue import FlowQueueClient, FlowQueueConsumer
+const codeSample = `import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("https://api-flowqueue.skill.college/", "fq_your_api_key")
+# create the queue + consumer in the dashboard, then use their ids
+async def main():
+    async with AsyncFlowQueueClient("https://api-flowqueue.skill.college/", "fq_key") as client:
+        # publish (idempotent)
+        await client.publish("<queue_id>", {"order_id": 42}, idempotency_key="order-42")
 
-# 1. create a durable queue + a pull consumer
-queue = client.create_queue("orders", max_retries=5, dlq_enabled=True)
-consumer = client.create_consumer(queue["id"], "billing", type="http")
+        # consume — return to complete, raise to retry
+        consumer = AsyncFlowQueueConsumer(client, "<consumer_id>")
+        await consumer.run(lambda d: charge(d["payload"]["order_id"]))
 
-# 2. publish (idempotent)
-client.publish(queue["id"], {"order_id": 42}, idempotency_key="order-42")
-
-# 3. consume — return to complete, raise to retry
-FlowQueueConsumer(client, consumer["id"]).run(
-    lambda d: charge(d.payload["order_id"])
-)`;
+asyncio.run(main())`;
 
 export function Home() {
   return (

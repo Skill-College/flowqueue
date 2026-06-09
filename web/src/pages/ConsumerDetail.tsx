@@ -78,20 +78,24 @@ curl -s -X POST $BASE/api/v1/deliveries/<delivery_id>/fail \\
   }
 
   if (consumer.type === "sdk") {
-    const code = `pip install flowqueue
+    const code = `pip install flowqueue   # async, typed
 
-from flowqueue import FlowQueueClient, FlowQueueConsumer
+import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("${base}", "fq_xxx")   # your API key
-consumer = FlowQueueConsumer(client, "${cid}")
+async def main():
+    async with AsyncFlowQueueClient("${base}", "fq_xxx") as client:   # your API key
+        consumer = AsyncFlowQueueConsumer(client, "${cid}")
 
-d = consumer.poll()                 # claim next delivery (or None)
-if d:
-    try:
-        handle(d.payload)           # your work here
-        consumer.complete(d.id, remark="ok")
-    except Exception as e:
-        consumer.fail(d.id, remark=str(e))`;
+        d = await consumer.poll()           # claim next delivery (or None)
+        if d:
+            try:
+                handle(d["payload"])        # your work here
+                await consumer.complete(d["id"], remark="ok")
+            except Exception as e:
+                await consumer.fail(d["id"], remark=str(e))
+
+asyncio.run(main())`;
     return <CodeBlock code={code} />;
   }
 

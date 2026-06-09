@@ -14,7 +14,8 @@ everything is Postgres-backed.
   httpx, PyJWT, bcrypt, structlog. Python 3.11+.
 - Frontend: React 18 + Vite + TypeScript + Tailwind + TanStack Query + React Router
   + recharts + sonner (`web/`).
-- SDK: standalone sync httpx client, published to PyPI as `flowqueue` (`sdk/`).
+- SDK: standalone **async, typed** httpx client (publish + consume only — no
+  management/api-keys/replay/DLQ), published to PyPI as `flowqueue` (`sdk/`).
 - Infra: Docker Compose — `db` (Postgres 18), `app` (uvicorn API), `worker`
   (APScheduler jobs), `web` (nginx serves SPA + proxies `/api` → app). Optional `nginx`.
 
@@ -52,7 +53,7 @@ app/
   cli.py             create-user, promote-admin, create-api-key, claim-orphans, init-db
 alembic/versions/    migrations 0001..0008
 web/                 React SPA (src/pages, src/components/ui, src/lib)
-sdk/                 publishable `flowqueue` client (+ PUBLISHING.md)
+sdk/                 publishable async `flowqueue` client (client/consumer/types/errors)
 ```
 
 ## Non-negotiable invariants (do not break)

@@ -1,75 +1,81 @@
 # flowqueue
 
-Python client SDK for **FlowQueue** — a cloud-native message processing platform
-(durable queues, per-consumer delivery lifecycle, retries, dead-letter queue,
-scheduled delivery, webhooks with HMAC signing, replay, and a tamper-evident audit
-log).
+Async, typed Python **runtime** client for **FlowQueue** — a cloud-native message
+processing platform. The SDK does two things: **publish** messages and **consume**
+deliveries. Everything else (creating queues/consumers, API keys, replay, dead-letter
+recovery, metrics) lives in the **FlowQueue UI** (or the HTTP API directly).
 
 ```bash
 pip install flowqueue
 ```
 
+Requires Python 3.9+. Ships with type hints (`py.typed`) — editors autocomplete
+response shapes (`MessageOut`, `DeliveryOut`).
+
 ## Quickstart
 
+Create the queue and consumer in the FlowQueue UI, then use their ids here:
+
 ```python
-from flowqueue import FlowQueueClient, FlowQueueConsumer
+import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("https://flowqueue.example.com", "fq_your_api_key")
+QUEUE_ID = "<queue_id>"
+CONSUMER_ID = "<consumer_id>"
 
-# Create a queue + a pull consumer
-queue = client.create_queue("orders", max_retries=5, dlq_enabled=True)
-consumer = client.create_consumer(queue["id"], "billing", type="http")
 
-# Publish (optionally scheduled)
-client.publish(queue["id"], {"order_id": 42}, idempotency_key="order-42")
-client.publish(queue["id"], {"order_id": 43}, delay_seconds=30)   # deliver in 30s
+async def main():
+    async with AsyncFlowQueueClient("https://flowqueue.example.com", "fq_your_api_key") as client:
+        # Publish (optionally scheduled)
+        await client.publish(QUEUE_ID, {"order_id": 42}, idempotency_key="order-42")
+        await client.publish(QUEUE_ID, {"order_id": 43}, delay_seconds=30)  # deliver in 30s
 
-# Consume one delivery
-c = FlowQueueConsumer(client, consumer["id"])
-d = c.poll()
-if d:
-    print(d.payload)
-    c.complete(d.id, remark="done")
+        # Consume one delivery
+        consumer = AsyncFlowQueueConsumer(client, CONSUMER_ID)
+        d = await consumer.poll()
+        if d:
+            print(d["payload"])
+            await consumer.complete(d["id"], remark="done")
+
+
+asyncio.run(main())
 ```
 
 ## Run a worker loop
 
-```python
-def handle(delivery):
-    process(delivery.payload)        # raise to fail (retry / DLQ), return to complete
-
-FlowQueueConsumer(client, consumer_id).run(handle, poll_interval=2.0)
-```
-
-## Management, replay, DLQ
+The handler may be sync or async. Return → the delivery is completed; raise → it is
+failed (retry / DLQ per queue config).
 
 ```python
-client.pause_queue(qid); client.resume_queue(qid)
-client.queue_stats(qid)
-client.purge_queue(qid)              # permanently delete pending messages
-client.queue_timeline(qid, action="queue_purged")  # queue activity log
-client.replay_failed(consumer_id)
-dead = client.dlq_list(qid)
-client.requeue_all(qid)              # bulk requeue the dead-letter queue
+async def handle(delivery):
+    await process(delivery["payload"])
 
-# Webhook consumer with validation headers + outcome-based retention queue:
-q = client.create_queue("billing", success_retention_seconds=86400,
-                        failed_retention_seconds=604800)
-client.create_consumer(q["id"], "hook", type="webhook",
-                       endpoint_url="https://example.com/hook",
-                       custom_headers={"X-Api-Key": "secret"})
+async def main():
+    async with AsyncFlowQueueClient(url, key) as client:
+        await AsyncFlowQueueConsumer(client, CONSUMER_ID).run(handle, poll_interval=2.0)
 ```
 
-## API keys & scopes
-
-Generate scoped keys in the FlowQueue UI or:
+## Scheduling
 
 ```python
-key = client.create_api_key("ci-publisher", scopes=["publish"])
-print(key["token"])   # shown once
+from datetime import datetime, timedelta, timezone
+
+await client.publish(qid, {"ping": 1}, delay_seconds=30)
+await client.publish(qid, {"ping": 1}, deliver_at=datetime.now(timezone.utc) + timedelta(hours=1))
 ```
 
-Errors raise `flowqueue.ApiError(status, code, message)`.
+## Errors
+
+Non-2xx responses raise `flowqueue.ApiError(status, code, message)`.
+
+```python
+from flowqueue import ApiError
+
+try:
+    await client.publish(qid, {"x": 1})
+except ApiError as e:
+    print(e.status, e.code, e.message)
+```
 
 ## License
 

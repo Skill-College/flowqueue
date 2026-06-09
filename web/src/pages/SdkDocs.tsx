@@ -34,7 +34,7 @@ export function SdkDocs() {
     <div>
       <PageHeader
         title="Python SDK"
-        description="Official flowqueue client — install, produce, consume, manage"
+        description="Official flowqueue client — async, typed, publish + consume"
         action={
           <a href="https://pypi.org/project/flowqueue/" target="_blank" rel="noreferrer">
             <Button variant="outline">
@@ -47,29 +47,38 @@ export function SdkDocs() {
       <div className="space-y-6">
         <Card>
           <CardHeader><CardTitle>Install</CardTitle></CardHeader>
-          <CardContent><Code code={`pip install flowqueue`} /></CardContent>
+          <CardContent>
+            <Code code={`pip install flowqueue   # async, typed; Python 3.9+`} />
+            <p className="mt-3 text-sm text-muted-foreground">
+              The SDK is runtime-only: <strong>publish</strong> and <strong>consume</strong>.
+              Create queues, consumers and API keys in this dashboard.
+            </p>
+          </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle>Quickstart</CardTitle></CardHeader>
           <CardContent>
-            <Code code={`from flowqueue import FlowQueueClient, FlowQueueConsumer
+            <Code code={`import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("${base}", "fq_your_api_key")
+# create the queue + consumer in the dashboard, then use their ids
+QUEUE_ID = "<queue_id>"
+CONSUMER_ID = "<consumer_id>"
 
-# Create a queue + pull consumer
-queue = client.create_queue("orders", max_retries=5, dlq_enabled=True)
-consumer = client.create_consumer(queue["id"], "billing", type="http")
+async def main():
+    async with AsyncFlowQueueClient("${base}", "fq_your_api_key") as client:
+        # Publish
+        await client.publish(QUEUE_ID, {"order_id": 42}, idempotency_key="order-42")
 
-# Publish
-client.publish(queue["id"], {"order_id": 42}, idempotency_key="order-42")
+        # Consume one delivery
+        c = AsyncFlowQueueConsumer(client, CONSUMER_ID)
+        d = await c.poll()
+        if d:
+            print(d["payload"])
+            await c.complete(d["id"], remark="done")
 
-# Consume one delivery
-c = FlowQueueConsumer(client, consumer["id"])
-d = c.poll()
-if d:
-    print(d.payload)
-    c.complete(d.id, remark="done")`} />
+asyncio.run(main())`} />
           </CardContent>
         </Card>
 
@@ -77,80 +86,52 @@ if d:
           <CardHeader><CardTitle>Producer — publish & schedule</CardTitle></CardHeader>
           <CardContent>
             <Code code={`# immediate
-client.publish(qid, {"hello": "world"})
+await client.publish(qid, {"hello": "world"})
 
 # idempotent (dedup by key)
-client.publish(qid, {"hello": "world"}, idempotency_key="evt-123")
+await client.publish(qid, {"hello": "world"}, idempotency_key="evt-123")
 
 # delayed delivery (seconds)
-client.publish(qid, {"ping": 1}, delay_seconds=30)
+await client.publish(qid, {"ping": 1}, delay_seconds=30)
 
 # scheduled for an absolute time
 from datetime import datetime, timedelta, timezone
-client.publish(qid, {"ping": 1}, deliver_at=datetime.now(timezone.utc) + timedelta(hours=1))`} />
+await client.publish(qid, {"ping": 1}, deliver_at=datetime.now(timezone.utc) + timedelta(hours=1))`} />
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader><CardTitle>Consumer — worker loop</CardTitle></CardHeader>
           <CardContent>
-            <Code code={`from flowqueue import FlowQueueClient, FlowQueueConsumer
+            <Code code={`import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("${base}", "fq_your_api_key")
-consumer = FlowQueueConsumer(client, "<consumer_id>")
-
-def handle(delivery):
+async def handle(delivery):
     # return normally -> delivery completed
     # raise -> delivery failed (retry, then dead-letter per queue config)
-    process(delivery.payload)
+    await process(delivery["payload"])
 
-consumer.run(handle, poll_interval=2.0)`} />
+async def main():
+    async with AsyncFlowQueueClient("${base}", "fq_your_api_key") as client:
+        consumer = AsyncFlowQueueConsumer(client, "<consumer_id>")
+        await consumer.run(handle, poll_interval=2.0)
+
+asyncio.run(main())`} />
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Management, replay & DLQ</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Errors</CardTitle></CardHeader>
           <CardContent>
-            <Code code={`# queues
-client.pause_queue(qid); client.resume_queue(qid)
-client.update_queue(qid, max_retries=10)
-client.queue_stats(qid)
-client.queue_timeseries(qid, minutes=60)
+            <Code code={`from flowqueue import ApiError
 
-# consumers
-client.create_consumer(qid, "eu-hook", type="webhook",
-                       endpoint_url="https://example.com/hook",
-                       signing_secret="whsec_...",
-                       routing_rules=[{"field":"payload.country","operator":"equals","value":"IN"}],
-                       match_mode="any", auto_complete=False)
-client.test_consumer(qid, consumer_id)
-
-# replay
-client.replay_failed(consumer_id)
-client.replay_backfill(consumer_id)
-
-# dead-letter queue
-dead = client.dlq_list(qid)
-client.requeue(delivery_id)      # one
-client.requeue_all(qid)          # bulk
-client.discard(delivery_id)`} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader><CardTitle>API keys & errors</CardTitle></CardHeader>
-          <CardContent>
-            <Code code={`# scoped key (token shown once)
-key = client.create_api_key("ci-publisher", scopes=["publish"])
-print(key["token"])
-
-from flowqueue import ApiError
 try:
-    client.publish(qid, {"x": 1})
+    await client.publish(qid, {"x": 1})
 except ApiError as e:
     print(e.status, e.code, e.message)`} />
             <p className="mt-3 text-sm text-muted-foreground">
-              Full HTTP API reference: <a href="/docs" className="text-primary hover:underline">/docs</a> (OpenAPI).
+              Management, replay & DLQ live in this dashboard. Full HTTP API reference:{" "}
+              <a href="/docs" className="text-primary hover:underline">/docs</a> (OpenAPI).
             </p>
           </CardContent>
         </Card>

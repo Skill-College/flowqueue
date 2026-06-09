@@ -9,15 +9,14 @@ const sections = [
   { id: 'quickstart', label: 'Quickstart' },
   { id: 'producer', label: 'Producer' },
   { id: 'consumer', label: 'Consumer loop' },
-  { id: 'manage', label: 'Manage, replay & DLQ' },
-  { id: 'keys', label: 'API keys & errors' },
+  { id: 'errors', label: 'Errors' },
 ];
 
 export function SdkDocsPublic() {
   return (
     <DocsShell
       title="Python SDK"
-      subtitle="The official flowqueue client — install, produce, consume and manage queues."
+      subtitle="The official flowqueue client — async, typed; publish and consume."
       sections={sections}
       action={
         <a href="https://pypi.org/project/flowqueue/" target="_blank" rel="noreferrer">
@@ -28,33 +27,35 @@ export function SdkDocsPublic() {
       }
     >
       <DocSection id="install" title="Install">
-        <p className="text-muted-foreground">Requires Python 3.8+.</p>
+        <p className="text-muted-foreground">
+          Async, typed runtime client (publish + consume). Requires Python 3.9+. Manage
+          queues, consumers and API keys in the dashboard.
+        </p>
         <CodeBlock lang="bash" code={`pip install flowqueue`} />
       </DocSection>
 
       <DocSection id="quickstart" title="Quickstart">
         <p className="text-muted-foreground">
-          Create a queue and a pull consumer, publish a message, and consume one delivery.
+          Create the queue and consumer in the dashboard, then publish and consume by id.
         </p>
         <CodeBlock
           lang="python"
-          code={`from flowqueue import FlowQueueClient, FlowQueueConsumer
+          code={`import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("https://api-flowqueue.skill.college", "fq_your_api_key")
+async def main():
+    async with AsyncFlowQueueClient("https://api-flowqueue.skill.college", "fq_key") as client:
+        # Publish
+        await client.publish("<queue_id>", {"order_id": 42}, idempotency_key="order-42")
 
-# Create a queue + pull consumer
-queue = client.create_queue("orders", max_retries=5, dlq_enabled=True)
-consumer = client.create_consumer(queue["id"], "billing", type="http")
+        # Consume one delivery
+        c = AsyncFlowQueueConsumer(client, "<consumer_id>")
+        d = await c.poll()
+        if d:
+            print(d["payload"])
+            await c.complete(d["id"], remark="done")
 
-# Publish
-client.publish(queue["id"], {"order_id": 42}, idempotency_key="order-42")
-
-# Consume one delivery
-c = FlowQueueConsumer(client, consumer["id"])
-d = c.poll()
-if d:
-    print(d.payload)
-    c.complete(d.id, remark="done")`}
+asyncio.run(main())`}
         />
       </DocSection>
 
@@ -62,84 +63,55 @@ if d:
         <CodeBlock
           lang="python"
           code={`# immediate
-client.publish(qid, {"hello": "world"})
+await client.publish(qid, {"hello": "world"})
 
 # idempotent (dedup by key)
-client.publish(qid, {"hello": "world"}, idempotency_key="evt-123")
+await client.publish(qid, {"hello": "world"}, idempotency_key="evt-123")
 
 # delayed delivery (seconds)
-client.publish(qid, {"ping": 1}, delay_seconds=30)
+await client.publish(qid, {"ping": 1}, delay_seconds=30)
 
 # scheduled for an absolute time
 from datetime import datetime, timedelta, timezone
-client.publish(qid, {"ping": 1},
-               deliver_at=datetime.now(timezone.utc) + timedelta(hours=1))`}
+await client.publish(qid, {"ping": 1},
+                     deliver_at=datetime.now(timezone.utc) + timedelta(hours=1))`}
         />
       </DocSection>
 
       <DocSection id="consumer" title="Consumer — worker loop">
         <p className="text-muted-foreground">
-          Return normally to complete a delivery; raise to fail it (it retries, then dead-letters
-          per the queue config).
+          The handler may be sync or async. Return normally to complete a delivery; raise to
+          fail it (it retries, then dead-letters per the queue config).
         </p>
         <CodeBlock
           lang="python"
-          code={`from flowqueue import FlowQueueClient, FlowQueueConsumer
+          code={`import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("https://api-flowqueue.skill.college", "fq_your_api_key")
-consumer = FlowQueueConsumer(client, "<consumer_id>")
+async def handle(delivery):
+    await process(delivery["payload"])
 
-def handle(delivery):
-    process(delivery.payload)
+async def main():
+    async with AsyncFlowQueueClient("https://api-flowqueue.skill.college", "fq_key") as client:
+        consumer = AsyncFlowQueueConsumer(client, "<consumer_id>")
+        await consumer.run(handle, poll_interval=2.0)
 
-consumer.run(handle, poll_interval=2.0)`}
+asyncio.run(main())`}
         />
       </DocSection>
 
-      <DocSection id="manage" title="Management, replay & DLQ">
+      <DocSection id="errors" title="Errors">
         <CodeBlock
           lang="python"
-          code={`# queues
-client.pause_queue(qid); client.resume_queue(qid)
-client.update_queue(qid, max_retries=10)
-client.queue_stats(qid)
-client.queue_timeseries(qid, minutes=60)
+          code={`from flowqueue import ApiError
 
-# webhook consumer with conditional routing
-client.create_consumer(qid, "eu-hook", type="webhook",
-                       endpoint_url="https://example.com/hook",
-                       signing_secret="whsec_...",
-                       routing_rules=[{"field": "payload.country",
-                                       "operator": "equals", "value": "IN"}],
-                       match_mode="any", auto_complete=False)
-
-# replay
-client.replay_failed(consumer_id)
-client.replay_backfill(consumer_id)
-
-# dead-letter queue
-dead = client.dlq_list(qid)
-client.requeue(delivery_id)      # one
-client.requeue_all(qid)          # bulk
-client.discard(delivery_id)`}
-        />
-      </DocSection>
-
-      <DocSection id="keys" title="API keys & errors">
-        <CodeBlock
-          lang="python"
-          code={`# scoped key (token shown once)
-key = client.create_api_key("ci-publisher", scopes=["publish"])
-print(key["token"])
-
-from flowqueue import ApiError
 try:
-    client.publish(qid, {"x": 1})
+    await client.publish(qid, {"x": 1})
 except ApiError as e:
     print(e.status, e.code, e.message)`}
         />
         <Reveal className="mt-4 rounded-xl border border-border bg-card/60 p-4 text-sm text-muted-foreground">
-          Prefer raw HTTP? See the{' '}
+          Queue/consumer management, replay & DLQ live in the dashboard. Prefer raw HTTP? See the{' '}
           <a href="/docs/api" className="text-primary hover:underline">
             HTTP pull API docs
           </a>{' '}

@@ -245,20 +245,23 @@ curl $BASE/api/v1/replay/<replay_request_id> -H "Authorization: Bearer $TOKEN"
 
 ## Python SDK
 
+Async, typed **runtime** client (`pip install flowqueue`) — publish + consume only.
+Queues, consumers, API keys, replay, and DLQ are managed in the UI / HTTP API, not the
+SDK. See `sdk/README.md`.
+
 ```python
-from app.sdk import FlowQueueClient, FlowQueueConsumer
+import asyncio
+from flowqueue import AsyncFlowQueueClient, AsyncFlowQueueConsumer
 
-client = FlowQueueClient("http://localhost:8000", "fq_...")
-client.publish(queue_id, {"order_id": 42}, idempotency_key="order-42")
+async def main():
+    async with AsyncFlowQueueClient("http://localhost:8000", "fq_...") as client:
+        await client.publish(queue_id, {"order_id": 42}, idempotency_key="order-42")
 
-consumer = FlowQueueConsumer(client, consumer_id)
-d = consumer.poll()
-if d:
-    try:
-        handle(d.payload)
-        consumer.complete(d.id, remark="ok")
-    except Exception as e:
-        consumer.fail(d.id, remark=str(e))
+        consumer = AsyncFlowQueueConsumer(client, consumer_id)
+        # handler may be sync or async; return => complete, raise => fail (retry/DLQ)
+        await consumer.run(lambda d: handle(d["payload"]))
+
+asyncio.run(main())
 ```
 
 ## Configuration (env vars)
