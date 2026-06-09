@@ -70,8 +70,8 @@ class FlowQueueClient:
     # ---- queues ----------------------------------------------------------- #
     def create_queue(self, name: str, **opts) -> dict:
         """Create a queue. opts: fifo_enabled, max_retries, retry_delay_seconds,
-        visibility_timeout_seconds, retention_seconds, processed_retention_seconds,
-        dlq_enabled, metadata."""
+        visibility_timeout_seconds, retention_seconds, success_retention_seconds,
+        failed_retention_seconds, dlq_enabled, metadata."""
         return self._request("POST", f"{self._v}/queues", json={"name": name, **opts})
 
     def list_queues(self, archived: bool = False, limit: int = 100, offset: int = 0) -> dict:
@@ -106,6 +106,27 @@ class FlowQueueClient:
             "GET", f"{self._v}/queues/{queue_id}/timeseries", params={"minutes": minutes}
         )
 
+    def purge_queue(self, queue_id: str) -> dict:
+        """Permanently delete all pending (un-started) messages. Cannot be undone.
+        Returns {"deliveries": n, "messages": m}."""
+        return self._request("POST", f"{self._v}/queues/{queue_id}/purge")
+
+    def queue_timeline(
+        self,
+        queue_id: str,
+        action: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict:
+        """Queue activity timeline (newest first). Optionally filter by action, e.g.
+        'queue_purged', 'messages_expired'."""
+        params: dict = {"limit": limit, "offset": offset}
+        if action:
+            params["action"] = action
+        return self._request(
+            "GET", f"{self._v}/queues/{queue_id}/timeline", params=params
+        )
+
     # ---- consumers -------------------------------------------------------- #
     def create_consumer(
         self,
@@ -118,6 +139,7 @@ class FlowQueueClient:
         match_mode: str = "any",
         auto_complete: bool = True,
         signing_secret: str | None = None,
+        custom_headers: dict | None = None,
         metadata: dict | None = None,
     ) -> dict:
         body = {
@@ -128,6 +150,7 @@ class FlowQueueClient:
             "match_mode": match_mode,
             "auto_complete": auto_complete,
             "signing_secret": signing_secret,
+            "custom_headers": custom_headers or {},
             "metadata": metadata or {},
         }
         return self._request("POST", f"{self._v}/queues/{queue_id}/consumers", json=body)

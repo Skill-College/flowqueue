@@ -28,7 +28,8 @@ export function Queues() {
   const [retryDelay, setRetryDelay] = useState(60);
   const [visibility, setVisibility] = useState(30);
   const [retention, setRetention] = useState(604800);
-  const [processedRetention, setProcessedRetention] = useState(2592000);
+  const [successRetention, setSuccessRetention] = useState(86400);
+  const [failedRetention, setFailedRetention] = useState(604800);
   const [dlqEnabled, setDlqEnabled] = useState(true);
   const [metadataText, setMetadataText] = useState("");
 
@@ -59,7 +60,8 @@ export function Queues() {
           retry_delay_seconds: retryDelay,
           visibility_timeout_seconds: visibility,
           retention_seconds: retention,
-          processed_retention_seconds: processedRetention,
+          success_retention_seconds: successRetention,
+          failed_retention_seconds: failedRetention,
           dlq_enabled: dlqEnabled,
           metadata,
         })
@@ -206,14 +208,19 @@ export function Queues() {
               <p className="text-xs text-muted-foreground">In-flight time before auto-reclaim.</p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="rt">Message retention (s)</Label>
+              <Label htmlFor="rt">Pending retention (s)</Label>
               <Input id="rt" type="number" min={1} value={retention} onChange={(e) => setRetention(Number(e.target.value))} />
-              <p className="text-xs text-muted-foreground">Default 604800 = 7 days.</p>
+              <p className="text-xs text-muted-foreground">Un-consumed messages. Default 604800 = 7 days.</p>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="pr">Processed-log retention (s)</Label>
-              <Input id="pr" type="number" min={1} value={processedRetention} onChange={(e) => setProcessedRetention(Number(e.target.value))} />
-              <p className="text-xs text-muted-foreground">Default 2592000 = 30 days.</p>
+              <Label htmlFor="sr">Success retention (s)</Label>
+              <Input id="sr" type="number" min={1} value={successRetention} onChange={(e) => setSuccessRetention(Number(e.target.value))} />
+              <p className="text-xs text-muted-foreground">Completed messages. Default 86400 = 24 hours.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="fr">Failed retention (s)</Label>
+              <Input id="fr" type="number" min={1} value={failedRetention} onChange={(e) => setFailedRetention(Number(e.target.value))} />
+              <p className="text-xs text-muted-foreground">Failed/dead messages. Default 604800 = 7 days.</p>
             </div>
           </div>
 

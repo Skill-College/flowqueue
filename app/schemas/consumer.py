@@ -29,6 +29,8 @@ class ConsumerCreate(BaseModel):
     # Push (webhook) only. True => complete on 2xx; False => wait for callback.
     auto_complete: bool = True
     signing_secret: str | None = Field(default=None, max_length=128)
+    # Webhook only: extra headers sent on every POST (receiver-side validation).
+    custom_headers: dict[str, str] = Field(default_factory=dict)
     metadata: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -45,6 +47,7 @@ class ConsumerUpdate(BaseModel):
     match_mode: MatchMode | None = None
     auto_complete: bool | None = None
     signing_secret: str | None = Field(default=None, max_length=128)
+    custom_headers: dict[str, str] | None = None
     metadata: dict | None = None
     is_active: bool | None = None
 
@@ -61,6 +64,7 @@ class ConsumerOut(BaseModel):
     match_mode: MatchMode
     auto_complete: bool
     signing_secret: str | None
+    custom_headers: dict[str, str] = Field(default_factory=dict)
     is_active: bool
     metadata: dict = Field(validation_alias="meta", serialization_alias="metadata")
     created_at: datetime

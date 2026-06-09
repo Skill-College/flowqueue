@@ -46,9 +46,18 @@ FlowQueueConsumer(client, consumer_id).run(handle, poll_interval=2.0)
 ```python
 client.pause_queue(qid); client.resume_queue(qid)
 client.queue_stats(qid)
+client.purge_queue(qid)              # permanently delete pending messages
+client.queue_timeline(qid, action="queue_purged")  # queue activity log
 client.replay_failed(consumer_id)
 dead = client.dlq_list(qid)
 client.requeue_all(qid)              # bulk requeue the dead-letter queue
+
+# Webhook consumer with validation headers + outcome-based retention queue:
+q = client.create_queue("billing", success_retention_seconds=86400,
+                        failed_retention_seconds=604800)
+client.create_consumer(q["id"], "hook", type="webhook",
+                       endpoint_url="https://example.com/hook",
+                       custom_headers={"X-Api-Key": "secret"})
 ```
 
 ## API keys & scopes

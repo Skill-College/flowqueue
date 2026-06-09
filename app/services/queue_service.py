@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +26,8 @@ async def create_queue(
         max_retries=data.max_retries,
         retry_delay_seconds=data.retry_delay_seconds,
         retention_seconds=data.retention_seconds,
-        processed_retention_seconds=data.processed_retention_seconds,
+        success_retention_seconds=data.success_retention_seconds,
+        failed_retention_seconds=data.failed_retention_seconds,
         visibility_timeout_seconds=data.visibility_timeout_seconds,
         dlq_enabled=data.dlq_enabled,
         meta=data.metadata,
@@ -110,6 +111,41 @@ async def soft_delete_queue(session: AsyncSession, queue_id: uuid.UUID) -> Queue
     queue.is_active = False
     await session.flush()
     return queue
+
+
+async def purge_queue(session: AsyncSession, queue_id: uuid.UUID) -> dict:
+    """Permanently delete all PENDING (un-started) messages in a queue.
+
+    Deletes deliveries still in 'pending' status, then any message left with zero
+    deliveries (fully un-started). Messages with non-pending deliveries
+    (processing/completed/failed/dead) are preserved. delivery_logs survive because
+    their FK is ON DELETE SET NULL. The per-queue sequence counter is NOT reset.
+
+    Returns counts: {"deliveries": n, "messages": m}.
+    """
+    await get_queue(session, queue_id)
+
+    msg_ids = select(Message.id).where(Message.queue_id == queue_id)
+    del_deliveries = await session.execute(
+        delete(Delivery).where(
+            Delivery.status == DeliveryStatus.pending,
+            Delivery.message_id.in_(msg_ids),
+        )
+    )
+
+    # Delete messages of this queue that now have no remaining deliveries.
+    has_delivery = (
+        select(Delivery.id).where(Delivery.message_id == Message.id).exists()
+    )
+    del_messages = await session.execute(
+        delete(Message).where(Message.queue_id == queue_id, ~has_delivery)
+    )
+
+    await session.flush()
+    return {
+        "deliveries": del_deliveries.rowcount or 0,
+        "messages": del_messages.rowcount or 0,
+    }
 
 
 async def queue_stats(session: AsyncSession, queue_id: uuid.UUID) -> QueueStats:

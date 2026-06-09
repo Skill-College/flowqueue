@@ -58,7 +58,13 @@ async def _post(
         return WebhookResult(False, None, target, f"Blocked target: {exc}")
 
     body = _serialize(payload)
-    headers = {"Content-Type": "application/json", **base_headers}
+    # Caller-supplied headers first, then reserved FlowQueue headers, then the
+    # signature — reserved headers always win so callers can't forge our identity.
+    headers = {
+        **(consumer.custom_headers or {}),
+        "Content-Type": "application/json",
+        **base_headers,
+    }
     if consumer.signing_secret:
         headers["X-FlowQueue-Signature"] = sign_body(consumer.signing_secret, body)
     try:

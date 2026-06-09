@@ -7,6 +7,7 @@ from app.models.delivery_log import DeliveryLog
 from app.models.feedback import Feedback, FeedbackCategory
 from app.models.message import Message
 from app.models.queue import Queue
+from app.models.queue_log import QueueLog
 from app.models.queue_sequence import QueueSequence
 from app.models.replay_request import ReplayRequest, ReplayStatus, ReplayType
 from app.models.user import User, UserRole
@@ -24,6 +25,7 @@ __all__ = [
     "FeedbackCategory",
     "Message",
     "Queue",
+    "QueueLog",
     "QueueSequence",
     "ReplayRequest",
     "ReplayStatus",

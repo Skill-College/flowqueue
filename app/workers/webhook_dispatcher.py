@@ -127,13 +127,19 @@ async def run_once() -> int:
                     d.visible_after = datetime.now(timezone.utc) + timedelta(
                         seconds=queue.visibility_timeout_seconds
                     )
+                    remark = (
+                        f"Delivered to webhook consumer '{consumer.name}' "
+                        f"({consumer.id}); awaiting callback"
+                    )
                     audit_service.log_transition(
                         session,
                         d,
                         event_type=audit_service.EVENT_STATUS_UPDATED,
                         to_status=DeliveryStatus.processing,
+                        remark=remark,
                         context={**ctx, "delivered": True, "awaiting_ack": True},
                     )
+                    d.last_remark = remark
                     # status already 'processing' from the claim step.
                 else:
                     delivery_service.apply_failure(
