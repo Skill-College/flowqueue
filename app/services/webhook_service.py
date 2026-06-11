@@ -72,7 +72,7 @@ async def _post(
     except httpx.HTTPError as exc:
         return WebhookResult(False, None, target, f"HTTP error: {exc}")
     ok = 200 <= resp.status_code < 300
-    return WebhookResult(ok, resp.status_code, target, None if ok else resp.text[:500])
+    return WebhookResult(ok, resp.status_code, target, resp.text[:1000] if resp.text else None)
 
 
 async def send_test(client: httpx.AsyncClient, consumer: Consumer) -> WebhookResult:
