@@ -121,6 +121,7 @@ async def run_once() -> int:
                     )
                     d.status = DeliveryStatus.completed
                     d.completed_at = datetime.now(timezone.utc)
+                    d.last_remark = result.detail
                 elif result.success:
                     # Delivered, awaiting an explicit callback. Keep it 'processing'
                     # and arm the visibility timeout so a no-ack redelivers it.
